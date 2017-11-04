@@ -13,7 +13,8 @@ def get_screen_unit_selected(obs):
 def get_player_data(obs):
     player_ = [
         obs[3]['player'][1]/4000.0,
-        np.array(obs[3]['player'][3], dtype=np.int32)/max(1, np.array(obs[3]['player'][4], dtype=np.int32)),
+        np.array(obs[3]['player'][3], dtype=np.int32),
+        np.array(obs[3]['player'][4], dtype=np.float32),
         obs[3]['player'][5],
         obs[3]['player'][7]
     ]

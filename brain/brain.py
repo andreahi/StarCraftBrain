@@ -31,14 +31,14 @@ THREADS = 60
 OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
-GAMMA = 0.999
+GAMMA = 1.0
 
-N_STEP_RETURN = 101
+N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
-EPS_START = 0.7
+EPS_START = 1.0
 EPS_STOP = .15
-EPS_STEPS = 7500
+EPS_STEPS = 75000
 
 MIN_BATCH = 1000
 
@@ -80,12 +80,14 @@ class Brain:
         rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
 
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-
-        _, _, _, v, _ = self.predict(s_, rnn_state)
-        r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-
-        for _ in range(10):
-            a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, s, rnn_state)
+        class_weights = max(np.sum(a[0] + 0.001, axis=0)) / np.sum(a[0] + 0.001, axis=0)
+        class_weights = np.clip(class_weights, 0, 50)
+        #_, _, _, v, _ = self.predict(s_, rnn_state)
+        #r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
+        r = r   # set v to 0 where s_ is terminal state
+        print "a sum: ", np.sum(a[0], axis=0)
+        for _ in range(1):
+            a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, s, rnn_state, class_weights)
             print "a_loss_policy ", np.mean(a_loss)
             print "x_loss_policy ", np.mean(x_loss)
             print "y_loss_policy ", np.mean(y_loss)
@@ -131,8 +133,8 @@ class Brain:
                 self.great_queue[3].append(s_)
                 self.great_queue[4].append(1.)
 
-    def predict(self, s, batch_rnn_state):
-        return self.network.predict(s, batch_rnn_state)
+    def predict(self, available_actions, s, batch_rnn_state):
+        return self.network.predict(available_actions, s, batch_rnn_state)
 
 
 # ---------
@@ -169,7 +171,7 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x, y, v, rnn_state = brain.predict([[s[0]], [s[1]]], [[self.rnn_state[0]], [self.rnn_state[1]]])
+        a, x, y, v, rnn_state = brain.predict(available_actions, [[s[0]], [s[1]]], [[self.rnn_state[0]], [self.rnn_state[1]]])
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
@@ -184,12 +186,17 @@ class Agent:
             return a, x, y, self.rnn_state
 
         else:
-            p = a[0] * available_actions
-            a = weighted_random_index(p)
+            p = a #* available_actions
+            if(sum(p) == 0):
+                a = 0
+            else:
+                a = weighted_random_index(p)
 
             if a in get_screen_acions():
-                x = weighted_random_index(x[0])
-                y = weighted_random_index(y[0])
+                x = weighted_random_index(x)
+                y = weighted_random_index(y)
+
+
             else:
                 x = -1
                 y = -1
@@ -226,7 +233,7 @@ class Agent:
                 s, a, r, s_, rnn_sate = get_sample(self.memory, n)
                 brain.train_push(s, a, r, s_, rnn_sate)
 
-                time.sleep(1)
+                time.sleep(0.1)
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
@@ -278,13 +285,17 @@ class Environment(threading.Thread):
 
             #if self.render: self.env.render()
 
-            a, x, y, _rnn_state = self.agent.act(s, get_available_actions(obs))
+            _available_actions = get_available_actions(obs)
+            a, x, y, _rnn_state = self.agent.act(s, _available_actions)
 
             #x = np.random.randint(0, 84)
             #y = np.random.randint(0, 84)
+            if _available_actions[a] == 1:
+                _a = a
+            else:
+                _a = 0
 
-
-            _ = self.env.make_action(a, x, y)
+            _ = self.env.make_action(_a, x, y)
             done, obs, r = self.env.get_state()
 
             if done:  # terminal state
