@@ -15,11 +15,11 @@ import traceback
 
 from keras.models import *
 
-from Actions import get_screen_acions, get_action_map
-from Features import get_screen_unit_type, get_available_actions, get_player_data
-from Network import Network
-from RandomUtils import weighted_random_index
-from SC2ENV import SC2Game
+from brain.Actions import get_screen_acions, get_action_map
+from brain.Features import get_screen_unit_type, get_available_actions, get_player_data
+from brain.Network import Network
+from brain.RandomUtils import weighted_random_index
+from brain.SC2ENV import SC2Game
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
