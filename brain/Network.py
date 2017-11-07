@@ -51,10 +51,10 @@ class Network:
         # image_unit_type = tf.Print(image_unit_type, [image_unit_type], "image_unit_type: ")
         # image_selected_type = tf.Print(image_selected_type, [image_selected_type], "image_selected_type: ")
 
-        type_flatten = self.get_flatten_conv(self.inputs_unit_type)
+        #type_flatten = self.get_flatten_conv(self.inputs_unit_type)
 
 
-        flatten = tf.concat([type_flatten, self.input_player], axis=1)
+        flatten = tf.concat([self.input_player], axis=1)
 
         hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU())
         hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU())
