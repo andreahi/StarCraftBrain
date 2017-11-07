@@ -3,7 +3,7 @@ import redis
 
 from RedisUtil import recv_zipped_pickle
 
-r = redis.StrictRedis(host='localhost', port=6379, db=0)
+r = redis.StrictRedis(host='192.168.0.15', port=6379, db=0)
 
 
 import numpy as np
@@ -22,7 +22,7 @@ while True:
 
     average.append(np.average(y[-50:]))
     plt.scatter(range(len(average)), average)
-    print "average :", np.average(y[-50:])
+    print("average :", np.average(y[-50:]))
 
     plt.axis()
     plt.ion()

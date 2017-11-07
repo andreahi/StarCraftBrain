@@ -15,16 +15,13 @@ import traceback
 
 from keras.models import *
 
-from Actions import get_action_map, get_screen_acions
-# -- constants
+from Actions import get_screen_acions, get_action_map
 from Features import get_screen_unit_type, get_available_actions, get_player_data
 from Network import Network
 from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
-
 
 RUN_TIME = 300000
 THREADS = 60
@@ -48,6 +45,7 @@ LOSS_ENTROPY = .01  # entropy coefficient
 counter_lock = threading.Lock()
 episode_counter = 0
 
+
 # ---------
 class Brain:
     train_queue = [[], [], [], [], [], []]  # s, a, r, s', s' terminal mask
@@ -68,13 +66,13 @@ class Brain:
 
             s, a, r, s_, s_mask, rnn_state = self.train_queue
             self.train_queue = [[], [], [], [], [], []]
-            #self.train_queue = copy.deepcopy(self.great_queue)
+            # self.train_queue = copy.deepcopy(self.great_queue)
 
         s = [self.to_array(s, 0), self.to_array(s, 1)]
-        #s = np.stack(s, axis=1)
+        # s = np.stack(s, axis=1)
         a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2)]
         r = np.vstack(r)
-        #s_ = np.stack(s_, axis=1)
+        # s_ = np.stack(s_, axis=1)
         s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
         s_mask = np.vstack(s_mask)
         rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
@@ -82,19 +80,19 @@ class Brain:
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
         class_weights = max(np.sum(a[0] + 0.001, axis=0)) / np.sum(a[0] + 0.001, axis=0)
         class_weights = np.clip(class_weights, 0, 50)
-        #_, _, _, v, _ = self.predict(s_, rnn_state)
-        #r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-        r = r   # set v to 0 where s_ is terminal state
-        print "a sum: ", np.sum(a[0], axis=0)
-        for _ in range(1):
+        # _, _, _, v, _ = self.predict(s_, rnn_state)
+        # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
+        r = r  # set v to 0 where s_ is terminal state
+        print("a sum: ", np.sum(a[0], axis=0))
+        for _ in range(10):
             a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, s, rnn_state, class_weights)
-            print "a_loss_policy ", np.mean(a_loss)
-            print "x_loss_policy ", np.mean(x_loss)
-            print "y_loss_policy ", np.mean(y_loss)
-            print "loss_value ", np.mean(v_loss)
+            print("a_loss_policy ", np.mean(a_loss))
+            print("x_loss_policy ", np.mean(x_loss))
+            print("y_loss_policy ", np.mean(y_loss))
+            print("loss_value ", np.mean(v_loss))
 
 
-        #print "optimized done"
+            # print "optimized done"
 
     def to_array(self, s, idx):
         return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
@@ -152,7 +150,7 @@ class Agent:
         self.rnn_state = self.get_lstm_init_state()
 
     def reset(self):
-        #pass
+        # pass
         self.rnn_state = self.get_lstm_init_state()
 
     def get_lstm_init_state(self):
@@ -171,7 +169,8 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x, y, v, rnn_state = brain.predict(available_actions, [[s[0]], [s[1]]], [[self.rnn_state[0]], [self.rnn_state[1]]])
+        a, x, y, v, rnn_state = brain.predict(available_actions, [[s[0]], [s[1]]],
+                                              [[self.rnn_state[0]], [self.rnn_state[1]]])
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
@@ -186,8 +185,8 @@ class Agent:
             return a, x, y, self.rnn_state
 
         else:
-            p = a #* available_actions
-            if(sum(p) == 0):
+            p = a  # * available_actions
+            if (sum(p) == 0):
                 a = 0
             else:
                 a = weighted_random_index(p)
@@ -227,7 +226,7 @@ class Agent:
         if s_ is None:
             _, _, end_r, _, rnn_sate = get_sample(self.memory, len(self.memory))
             if r > 20:
-                print "I did geat! ", r
+                print("I did geat! ", r)
             while len(self.memory) > 0:
                 n = len(self.memory)
                 s, a, r, s_, rnn_sate = get_sample(self.memory, n)
@@ -262,17 +261,17 @@ class Environment(threading.Thread):
         self.agent = Agent(eps_start, eps_end, eps_steps)
 
     def runEpisode(self):
-        #s = self.env.reset()
-        print "epsilon ", self.agent.getEpsilon()
+        # s = self.env.reset()
+        print("epsilon ", self.agent.getEpsilon())
 
         global counter_lock
         with counter_lock:
             global episode_counter
             episode_counter += 1
 
-        #summary = tf.Summary()
-        #summary.value.add(tag='epsilon', simple_value=float(self.agent.getEpsilon()))
-        #brain.summary_writer.add_summary(summary, episode_counter)
+        # summary = tf.Summary()
+        # summary.value.add(tag='epsilon', simple_value=float(self.agent.getEpsilon()))
+        # brain.summary_writer.add_summary(summary, episode_counter)
 
         self.env.new_episode()
         done, obs, r = self.env.get_state()
@@ -283,13 +282,13 @@ class Environment(threading.Thread):
         while True:
             time.sleep(THREAD_DELAY)  # yield
 
-            #if self.render: self.env.render()
+            # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
             a, x, y, _rnn_state = self.agent.act(s, _available_actions)
 
-            #x = np.random.randint(0, 84)
-            #y = np.random.randint(0, 84)
+            # x = np.random.randint(0, 84)
+            # y = np.random.randint(0, 84)
             if _available_actions[a] == 1:
                 _a = a
             else:
@@ -300,7 +299,7 @@ class Environment(threading.Thread):
 
             if done:  # terminal state
                 s_ = None
-                #s_ = self.get_state(obs)
+                # s_ = self.get_state(obs)
             else:
                 s_ = self.get_state(obs)
 
@@ -313,11 +312,10 @@ class Environment(threading.Thread):
             if done or self.stop_signal:
                 break
 
-
         print("Total R:", R)
 
     def get_state(self, obs):
-        return [get_screen_unit_type(obs)/500.0, np.concatenate((get_player_data(obs), get_available_actions(obs)))]
+        return [get_screen_unit_type(obs) / 500.0, np.concatenate((get_player_data(obs), get_available_actions(obs)))]
 
     def run(self):
         while not self.stop_signal:
@@ -328,8 +326,8 @@ class Environment(threading.Thread):
 
             except Exception as exp:
                 tb = traceback.format_exc()
-                print "got exception while working"
-                print tb
+                print("got exception while working")
+                print(tb)
                 print(exp)
 
     def stop(self):

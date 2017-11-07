@@ -19,4 +19,4 @@ def recv_zipped_pickle(socket, key="trainingset", blocking=True, timeout=0):
     else:
         key, z = socket.lpop(key, timeout=timeout)
     p = zlib.decompress(z)
-    return pickle.loads(p)
+    return pickle.loads(p, encoding='latin1')

@@ -141,7 +141,7 @@ class Network:
         g = tf.get_default_graph()
 
         #with g.gradient_override_map({"Identity": "CustomGrad5"}):
-        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(tf.square(advantage) * 100000) , name="Identity")  # maximize policy
+        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(tf.square(advantage) * 100) , name="Identity")  # maximize policy
 
         with g.gradient_override_map({"Identity": "CustomGrad5"}):
             x_loss_policy = tf.identity((- x_log_prob * tf.stop_gradient(tf.square(advantage) * 100) ), name="Identity")  # maximize policy
@@ -177,8 +177,8 @@ class Network:
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
 
-        optimizer = tf.train.AdamOptimizer(1e-3)
-        gradients, variables = zip(*optimizer.compute_gradients( self.a_loss * 0.1  + self.x_loss*0.01 + self.y_loss*0.01 + self.v_loss ))
+        optimizer = tf.train.AdamOptimizer(1e-5)
+        gradients, variables = zip(*optimizer.compute_gradients( self.a_loss + self.x_loss + self.y_loss + .1*self.v_loss ))
         gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
 
         self.minimize = optimizer.apply_gradients(zip(gradients, variables))
