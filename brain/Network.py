@@ -1,3 +1,5 @@
+import random
+
 import tensorflow as tf
 
 from tensorflow.contrib import slim
@@ -245,6 +247,11 @@ class Network:
                                               self.input_player: s[1],
                                               self.state_in[0] : batch_rnn_state[0],
                                               self.state_in[1]: batch_rnn_state[1]})
+            if random.random()>0.99:
+                print("value: ", v)
+                print("policy: ", policy)
+                print("policy_x: ", policy_x)
+                print("policy_y: ", policy_y)
             return a, x, y, v, batch_rnn_state
 
 
