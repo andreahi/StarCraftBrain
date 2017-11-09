@@ -51,10 +51,10 @@ class Network:
         # image_unit_type = tf.Print(image_unit_type, [image_unit_type], "image_unit_type: ")
         # image_selected_type = tf.Print(image_selected_type, [image_selected_type], "image_selected_type: ")
 
-        #type_flatten = self.get_flatten_conv(self.inputs_unit_type)
+        type_flatten = self.get_flatten_conv(self.inputs_unit_type)
 
 
-        flatten = tf.concat([self.input_player], axis=1)
+        flatten = tf.concat([type_flatten, self.input_player], axis=1)
 
         hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU())
         hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU())
@@ -141,12 +141,12 @@ class Network:
         g = tf.get_default_graph()
 
         #with g.gradient_override_map({"Identity": "CustomGrad5"}):
-        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(tf.square(advantage) * 100) , name="Identity")  # maximize policy
+        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(advantage * 10000) , name="Identity")  # maximize policy
 
         with g.gradient_override_map({"Identity": "CustomGrad5"}):
-            x_loss_policy = tf.identity((- x_log_prob * tf.stop_gradient(tf.square(advantage) * 100) ), name="Identity")  # maximize policy
+            x_loss_policy = tf.identity((- x_log_prob * tf.stop_gradient(advantage * 10000) ), name="Identity")  # maximize policy
         with g.gradient_override_map({"Identity": "CustomGrad5"}):
-            y_loss_policy = tf.identity((- y_log_prob * tf.stop_gradient(tf.square(advantage) * 100) ), name="Identity")  # maximize policy
+            y_loss_policy = tf.identity((- y_log_prob * tf.stop_gradient(advantage * 10000) ), name="Identity")  # maximize policy
 
         with g.gradient_override_map({"Identity": "CustomGrad50"}):
             loss_value = tf.identity(tf.abs(advantage), name="Identity")    # minimize value error
@@ -178,7 +178,7 @@ class Network:
 
 
         optimizer = tf.train.AdamOptimizer(1e-5)
-        gradients, variables = zip(*optimizer.compute_gradients( self.a_loss + self.x_loss + self.y_loss + .1*self.v_loss ))
+        gradients, variables = zip(*optimizer.compute_gradients( self.a_loss * 0.1 + self.x_loss * 0.1 + self.y_loss * 0.1 + self.v_loss ))
         gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
 
         self.minimize = optimizer.apply_gradients(zip(gradients, variables))
