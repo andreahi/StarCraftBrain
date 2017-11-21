@@ -1,11 +1,12 @@
 import random
 
 import tensorflow as tf
+from sklearn.preprocessing import normalize
 
 from tensorflow.contrib import slim
 
 import numpy as np
-from tensorflow.contrib.keras.python.keras.layers import LeakyReLU
+from tensorflow.python.keras._impl.keras.layers import LeakyReLU
 
 
 class Network:
@@ -72,7 +73,7 @@ class Network:
         self.state_in = lstm_cell.zero_state(tf.shape(hidden4)[0], tf.float32)
 
         rnn_out, self.state_out = lstm_cell(hidden4, self.state_in)
-        #rnn_out = hidden4
+        rnn_out = hidden4
 
         # Output layers for policy and value estimations
         self.policy = slim.fully_connected(rnn_out, self.NUM_ACTIONS,
@@ -109,7 +110,8 @@ class Network:
 
         self.class_weight = tf.placeholder(tf.float32, shape=(self.NUM_ACTIONS), name="class_weight")
 
-
+        self.action_weight = tf.placeholder(tf.float32, 1)
+        self.value_weight = tf.placeholder(tf.float32, 1)
         a_reduced = tf.reduce_sum(self.a_t, axis=1)
         x_reduced = tf.reduce_sum(self.x_t, axis=1)
         y_reduced = tf.reduce_sum(self.y_t, axis=1)
@@ -117,7 +119,11 @@ class Network:
         t = self.policy * self.a_t
         t = tf.Print(t, [t, tf.shape(t)], "t: ")
 
-        a_log_soft = tf.multiply(tf.nn.log_softmax(self.policy), self.class_weight)
+        #self.policy = tf.Print(self.policy, [self.policy, tf.shape(self.policy)], "self.policy: ")
+
+        a_log_soft = tf.nn.log_softmax(self.policy)
+        a_log_soft = tf.Print(a_log_soft, [a_log_soft, tf.shape(a_log_soft)], "a_log_soft: ")
+
         a_soft = tf.nn.softmax(self.policy)
         a_log_prob = tf.reduce_sum(a_log_soft * self.a_t, axis=1)
 
@@ -134,7 +140,7 @@ class Network:
         a_log_prob = tf.Print(a_log_prob, [a_log_prob, tf.shape(a_log_prob)], "a_log_prob: ")
 
 
-        advantage =  (self.r_t - self.value)
+        advantage =  ( self.value - self.r_t)
 
         advantage = tf.squeeze(advantage)
         #advantage = tf.square(advantage) * tf.sign(advantage)
@@ -143,15 +149,15 @@ class Network:
         g = tf.get_default_graph()
 
         #with g.gradient_override_map({"Identity": "CustomGrad5"}):
-        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(advantage * 10000) , name="Identity")  # maximize policy
+        a_loss_policy = tf.identity(- a_log_prob  * tf.stop_gradient(advantage ) , name="Identity")  # maximize policy
 
         with g.gradient_override_map({"Identity": "CustomGrad5"}):
-            x_loss_policy = tf.identity((- x_log_prob * tf.stop_gradient(advantage * 10000) ), name="Identity")  # maximize policy
+            x_loss_policy = tf.identity((- x_log_prob * tf.stop_gradient(advantage ) ), name="Identity")  # maximize policy
         with g.gradient_override_map({"Identity": "CustomGrad5"}):
-            y_loss_policy = tf.identity((- y_log_prob * tf.stop_gradient(advantage * 10000) ), name="Identity")  # maximize policy
+            y_loss_policy = tf.identity((- y_log_prob * tf.stop_gradient(advantage ) ), name="Identity")  # maximize policy
 
         with g.gradient_override_map({"Identity": "CustomGrad50"}):
-            loss_value = tf.identity(tf.abs(advantage), name="Identity")    # minimize value error
+            loss_value = tf.identity(tf.square(advantage), name="Identity")    # minimize value error
         self.reduced_adv =  tf.reduce_mean(advantage)
         self.reduced_adv = tf.Print(self.reduced_adv, [self.reduced_adv, tf.shape(self.reduced_adv)], "self.reduced_adv: ")
 
@@ -166,21 +172,22 @@ class Network:
         y_entropy =  tf.reduce_sum(self.policy_y * tf.log(self.policy_y + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
 
         #loss_total = tf.reduce_mean(a_loss_policy + x_loss_policy + y_loss_policy + loss_value + entropy)
-        self.a_loss = tf.reduce_mean(a_loss_policy)
+        self.a_loss = -tf.reduce_sum(a_loss_policy)
         self.a_loss = tf.Print(self.a_loss, [self.a_loss, tf.shape(self.a_loss)], "self.a_loss: ")
 
-        self.x_loss = tf.reduce_mean(x_loss_policy)
+        self.x_loss = -tf.reduce_sum(x_loss_policy)
         self.x_loss = tf.Print(self.x_loss, [self.x_loss, tf.shape(self.x_loss)], "self.x_loss: ")
 
-        self.y_loss = tf.reduce_mean(y_loss_policy)
+        self.y_loss = -tf.reduce_sum(y_loss_policy)
         self.y_loss = tf.Print(self.y_loss, [self.y_loss, tf.shape(self.y_loss)], "self.y_loss: ")
 
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
 
-        optimizer = tf.train.AdamOptimizer(1e-5)
-        gradients, variables = zip(*optimizer.compute_gradients( self.a_loss * 0.1 + self.x_loss * 0.1 + self.y_loss * 0.1 + self.v_loss ))
+        optimizer = tf.train.AdamOptimizer(1e-6)
+
+        gradients, variables = zip(*optimizer.compute_gradients( self.action_weight *self.a_loss   + self.action_weight*self.x_loss  + self.action_weight*self.y_loss  + self.value_weight * self.v_loss ))
         gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
 
         self.minimize = optimizer.apply_gradients(zip(gradients, variables))
@@ -226,9 +233,27 @@ class Network:
                                                              self.r_t : r,
                                                              self.state_in[0]: rnn_state[0],
                                                              self.state_in[1]: rnn_state[1],
-                                                             self.class_weight: class_weights
+                                                             self.class_weight: class_weights,
+                                                             self.action_weight: [0.001],
+                                                             self.value_weight: [1000.0]
                                                              })
         return a_loss, x_loss, y_loss, v_loss
+    def train_value(self, a, r, s, rnn_state, class_weights):
+
+        _, v_loss, reduced_adv  = self.session.run([self.minimize, self.v_loss, self.reduced_adv],
+                                                  feed_dict={self.inputs_unit_type: s[0],
+                                                             self.input_player: s[1],
+                                                             self.a_t : a[0],
+                                                             self.x_t : a[1],
+                                                             self.y_t : a[2],
+                                                             self.r_t : r,
+                                                             self.state_in[0]: rnn_state[0],
+                                                             self.state_in[1]: rnn_state[1],
+                                                             self.class_weight: class_weights,
+                                                             self.action_weight: [0.0],
+                                                             self.value_weight: [1000.0]
+                                                             })
+        return v_loss
 
     def save(self):
         #self.saver.save(self.session, 'models/model-' + str(1) + '.cptk')
@@ -247,6 +272,11 @@ class Network:
                                               self.input_player: s[1],
                                               self.state_in[0] : batch_rnn_state[0],
                                               self.state_in[1]: batch_rnn_state[1]})
+
+            a = self.normalized_multinomial(available_actions, policy[0])
+            x = self.normalized_multinomial(1, policy_x[0], 1000)
+            y = self.normalized_multinomial(1, policy_y[0], 1000)
+
             if random.random()>0.99:
                 print("value: ", v)
                 print("policy: ", policy)
@@ -254,14 +284,22 @@ class Network:
                 print("policy_y: ", policy_y)
             return a, x, y, v, batch_rnn_state
 
+    def normalized_multinomial(self, available_actions, policy, n=1):
+        policy = policy - min(policy)
+        policy = policy * available_actions
+        if sum(policy) == 0:
+            return 0
+        policy = normalize(policy[:, np.newaxis], axis=0).ravel()
+        multinomial = np.random.multinomial(n, policy/sum(policy)-.0000001, size=1)
 
+        return np.argmax(multinomial)
 
     def get_flatten_conv(self, image_unit_type):
         # image_unit_type = tf.Print(image_unit_type, [image_unit_type], "get_flatten_conv: ")
 
         type_conv1 = slim.conv2d(activation_fn=LeakyReLU(),
-                                 inputs=image_unit_type, num_outputs=16,
-                                 kernel_size=8, stride=4, padding='VALID')
+                                 inputs=image_unit_type, num_outputs=32,
+                                 kernel_size=4, stride=2, padding='VALID')
         # type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
 
         type_conv2 = slim.conv2d(activation_fn=LeakyReLU(),

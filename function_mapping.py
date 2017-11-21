@@ -15,7 +15,7 @@ Function.ability(504, "Train_Zergling_quick", cmd_quick, 1343),
 Function.ability(84, "Build_SpawningPool_screen", cmd_screen, 1155),
 Function.ui_func(9, "select_larva", select_larva,lambda obs: obs.player_common.larva_count > 0),
 Function.ability(486, "Train_Queen_quick", cmd_quick, 1632),
-
+Function.ability(85, "Build_SpineCrawler_screen", cmd_screen, 1166),
 
 
 #common+

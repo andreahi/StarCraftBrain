@@ -1,6 +1,6 @@
 import numpy as np
 
-from brain.Actions import to_local_action, get_reversed_action_map
+from Actions import to_local_action, get_reversed_action_map
 
 
 def get_screen_unit_type(obs):

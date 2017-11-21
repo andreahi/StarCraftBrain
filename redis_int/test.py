@@ -1,11 +1,12 @@
-import redis
+import numpy as np
+from sklearn import preprocessing
+from sklearn.preprocessing import normalize
 
-from redis_int.RedisUtil import recv_zipped_pickle
+weights = np.array([-5, -3, 1])
+weights = weights - min(weights)
+weights = weights *  [1, 0, 1]
+weights = normalize(weights[:,np.newaxis], axis=0).ravel()
+multinomial = np.random.multinomial(100, weights, size=1)
 
-socket = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-try:
-    print recv_zipped_pickle(socket, key="werwerwerwer", blocking=True, timeout=5)
-
-except Exception:
-    print "got an exception, but thats ok because I cought it :)"
+print(multinomial)

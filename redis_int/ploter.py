@@ -9,7 +9,7 @@ r = redis.StrictRedis(host='192.168.0.15', port=6379, db=0)
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+USE_GUI = True
 
 y = []
 average = []
@@ -17,17 +17,20 @@ count = 0
 while True:
     y.append(recv_zipped_pickle(r, key="score"))
 
-    plt.clf()
-    plt.scatter(range(len(y)), y)
+    if USE_GUI:
+        plt.clf()
+        plt.scatter(range(len(y)), y)
 
-    average.append(np.average(y[-50:]))
-    plt.scatter(range(len(average)), average)
-    print("average :", np.average(y[-50:]))
+    average.append(np.average(y[-100:]))
+    if USE_GUI:
+        plt.scatter(range(len(average)), average)
+    print("average :", np.average(y[-100:]))
 
-    plt.axis()
-    plt.ion()
+    if USE_GUI:
+        plt.axis()
+        plt.ion()
+        plt.pause(0.0005)
 
-    plt.pause(0.0005)
     count += 1
 
     if len(y) > 500:

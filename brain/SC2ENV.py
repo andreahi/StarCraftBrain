@@ -1,6 +1,6 @@
 import redis
 
-from brain.Actions import get_screen_acions, to_sc2_action
+from Actions import get_screen_acions, to_sc2_action
 from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 
 class SC2Game:
