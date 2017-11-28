@@ -24,8 +24,8 @@ from SC2ENV import SC2Game
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
-THREADS = 100
-OPTIMIZERS = 2
+THREADS = 20
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -33,9 +33,9 @@ GAMMA = 1.0
 N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
-EPS_START = 1.0
-EPS_STOP = .15
-EPS_STEPS = 75000
+EPS_START = .5
+EPS_STOP = .3
+EPS_STEPS = 750
 
 MIN_BATCH = 10000
 
@@ -58,30 +58,32 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 2 * len(self.great_queue[0]) + 100:
+        if len(self.train_queue[0]) < 1000 + 100:
             time.sleep(1)  # yield
             return
 
         with self.lock_queue:
-            if len(self.train_queue[0]) < 2 * len(self.great_queue[0]) + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v = self.train_queue
             self.train_queue = [[], [], [], [], [], [], []]
             self.train_queue = copy.deepcopy(self.great_queue)
 
-            if len(self.great_queue[0])> 2000:
-                del self.great_queue[0][0:len(self.great_queue[0]) - 2000]
-                del self.great_queue[1][0:len(self.great_queue[1]) - 2000]
-                del self.great_queue[2][0:len(self.great_queue[2]) - 2000]
-                del self.great_queue[3][0:len(self.great_queue[3]) - 2000]
-                del self.great_queue[4][0:len(self.great_queue[4]) - 2000]
-                del self.great_queue[5][0:len(self.great_queue[5]) - 2000]
-                del self.great_queue[5][0:len(self.great_queue[6]) - 2000]
+            GREAT_GAME_SIZE = 1000
+            if len(self.great_queue[0])> GREAT_GAME_SIZE:
+                del self.great_queue[0][0:len(self.great_queue[0]) - GREAT_GAME_SIZE]
+                del self.great_queue[1][0:len(self.great_queue[1]) - GREAT_GAME_SIZE]
+                del self.great_queue[2][0:len(self.great_queue[2]) - GREAT_GAME_SIZE]
+                del self.great_queue[3][0:len(self.great_queue[3]) - GREAT_GAME_SIZE]
+                del self.great_queue[4][0:len(self.great_queue[4]) - GREAT_GAME_SIZE]
+                del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
+                del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
 
+        print("prepping training data")
         s = [self.to_array(s, 0), self.to_array(s, 1)]
         # s = np.stack(s, axis=1)
-        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2)]
+        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
         r = np.vstack(r)
         v = np.vstack(v)
         # s_ = np.stack(s_, axis=1)
@@ -100,7 +102,7 @@ class Brain:
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
         if self.first_run:
             print("first run")
-            for _ in range(1000):
+            for _ in range(10):
                 v_loss = self.network.train_value(a, r, s, rnn_state, class_weights)
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
@@ -200,74 +202,84 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x, y, v, rnn_state = brain.predict(available_actions, [[s[0]], [s[1]]],
+        a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state =\
+            brain.predict(available_actions, [[s[0]], [s[1]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
-                x = np.random.randint(0, 84)
-                y = np.random.randint(0, 84)
-            else:
-                x = -1
-                y = -1
-
-            return a, x, y, v, self.rnn_state
+                x_select_point = np.random.randint(0, 84)
+                y_select_point = np.random.randint(0, 84)
+                x_spawningPool = np.random.randint(0, 84)
+                y_spawningPool = np.random.randint(0, 84)
+                x_spineCrawler = np.random.randint(0, 84)
+                y_spineCrawler = np.random.randint(0, 84)
+                x_Gather = np.random.randint(0, 84)
+                y_Gather = np.random.randint(0, 84)
+            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, self.rnn_state
 
         else:
-            p = a  # * available_actions
-            #if (sum(p) == 0):
-            #    a = 0
-            #else:
-            #    a = weighted_random_index(p)
+            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, self.rnn_state
 
-            if a in get_screen_acions():
-                x = x
-                y = y
+    def get_sample(self, memory, n):
+        s, a, _, _, rnn_sate = memory[0]
+        _, _, _, s_, _ = memory[n - 1]
 
-
-            else:
-                x = -1
-                y = -1
-
-            return a, x, y, v, self.rnn_state
+        return s, a, self.R, s_, rnn_sate
 
     def train(self, s, a, r, v, s_, rnn_sate):
-        def get_sample(memory, n):
-            s, a, _, _, rnn_sate = memory[0]
-            _, _, _, s_, _ = memory[n - 1]
-
-            return s, a, self.R, s_, rnn_sate
 
         a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
-        x_cats = np.zeros(84)  # turn action into one-hot representation
-        y_cats = np.zeros(84)  # turn action into one-hot representation
+        x_select_cats = np.zeros(84)  # turn action into one-hot representation
+        y_select_cats = np.zeros(84)  # turn action into one-hot representation
+        x_spawningPool = np.zeros(84)  # turn action into one-hot representation
+        y_spawningPool = np.zeros(84)  # turn action into one-hot representation
+        x_spineCrawler = np.zeros(84)  # turn action into one-hot representation
+        y_spineCrawler = np.zeros(84)  # turn action into one-hot representation
+        x_Gather = np.zeros(84)  # turn action into one-hot representation
+        y_Gather = np.zeros(84)  # turn action into one-hot representation
         if a[0] != -1:
             a_cats[a[0]] = 1
         if a[1] != -1:
-            x_cats[a[1]] = 1
+            x_select_cats[a[1]] = 1
         if a[2] != -1:
-            y_cats[a[2]] = 1
+            y_select_cats[a[2]] = 1
+        if a[3] != -1:
+            x_spawningPool[a[3]] = 1
+        if a[4] != -1:
+            y_spawningPool[a[4]] = 1
+        if a[5] != -1:
+            x_spineCrawler[a[5]] = 1
+        if a[6] != -1:
+            y_spineCrawler[a[6]] = 1
+        if a[7] != -1:
+            x_Gather[a[7]] = 1
+        if a[8] != -1:
+            y_Gather[a[8]] = 1
 
-        self.memory.append((s, [a_cats, x_cats, y_cats], r, s_, rnn_sate))
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, y_select_cats, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather]), np.copy(r), s_, rnn_sate))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
         if s_ is None:
-            _, _, end_r, _, rnn_sate = get_sample(self.memory, len(self.memory))
+            _, _, end_r, _, rnn_sate = self.get_sample(self.memory, len(self.memory))
             if r > 20:
                 print("I did geat! ", r)
             while len(self.memory) > 0:
                 n = len(self.memory)
-                s, a, r, s_, rnn_sate = get_sample(self.memory, n)
-                if r > .6:
+                s, a, r, s_, rnn_sate = self.get_sample(self.memory, n)
+                if r > 99:
+                    raise Exception('Should not happen')
                     brain.push_great_game(s, a, r, v, s_, rnn_sate)
                 else:
                     if s[1][5 + np.argmax(a[0])] == 0:
+                        print(s[1])
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
                     else:
-                         brain.train_push(s, a, r, v, s_, rnn_sate)
+                        brain.push_great_game(s, a, r, v, s_, rnn_sate)
+                        brain.train_push(s, a, r, v, s_, rnn_sate)
 
                 time.sleep(0.1)
 
@@ -277,7 +289,9 @@ class Agent:
             self.R = 0
 
         if len(self.memory) >= N_STEP_RETURN:
-            s, a, r, s_, rnn_sate = get_sample(self.memory, N_STEP_RETURN)
+            raise Exception('Should not happen')
+
+            s, a, r, s_, rnn_sate = self.get_sample(self.memory, N_STEP_RETURN)
             brain.train_push(s, a, r, s_, rnn_sate)
 
             self.R = self.R - self.memory[0][2]
@@ -322,7 +336,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x, y, v, _rnn_state = self.agent.act(s, _available_actions)
+            a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, _rnn_state = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -331,7 +345,45 @@ class Environment(threading.Thread):
             else:
                 _a = 0
 
-            _ = self.env.make_action(_a, x, y)
+            if a == 2:
+                _ = self.env.make_action(_a, x_select_point, y_select_point)
+                x_spawningPool = -1
+                y_spawningPool = -1
+                x_spineCrawler = -1
+                y_spineCrawler = -1
+                x_Gather = -1
+                y_Gather = -1
+
+            elif a == 6:
+                _ = self.env.make_action(_a, x_spawningPool, y_spawningPool)
+                x_select_point = -1
+                y_select_point = -1
+                x_spineCrawler = -1
+                y_spineCrawler = -1
+                x_Gather = -1
+                y_Gather = -1
+
+            elif a == 9:
+                _ = self.env.make_action(_a, x_spineCrawler, y_spineCrawler)
+                x_select_point = -1
+                y_select_point = -1
+                x_spawningPool = -1
+                y_spawningPool = -1
+                x_Gather = -1
+                y_Gather = -1
+
+            elif a == 10:
+                _ = self.env.make_action(_a, x_Gather, x_Gather)
+                x_select_point = -1
+                y_select_point = -1
+                x_spawningPool = -1
+                y_spawningPool = -1
+                x_spineCrawler = -1
+                y_spineCrawler = -1
+
+            else:
+                _ = self.env.make_action(_a, -1, -1)
+
             done, obs, r = self.env.get_state()
 
             if done:  # terminal state
@@ -340,7 +392,7 @@ class Environment(threading.Thread):
             else:
                 s_ = self.get_state(obs)
 
-            self.agent.train(s, [a, x, y], r, v, s_, rnn_state)
+            self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state)
 
             rnn_state = _rnn_state
             s = s_
