@@ -9,7 +9,7 @@ r = redis.StrictRedis(host='192.168.0.15', port=6379, db=0)
 import numpy as np
 import matplotlib.pyplot as plt
 
-USE_GUI = True
+USE_GUI = False
 
 y = []
 average = []

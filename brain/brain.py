@@ -1,13 +1,3 @@
-# OpenGym CartPole-v0 with A3C on GPU
-# -----------------------------------
-#
-# A3C implementation with GPU optimizer threads.
-#
-# Made as part of blog series Let's make an A3C, available at
-# https://jaromiru.com/2017/02/16/lets-make-an-a3c-theory/
-#
-# author: Jaromir Janisch, 2017
-
 import random
 import threading
 import time
@@ -24,7 +14,7 @@ from SC2ENV import SC2Game
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
-THREADS = 20
+THREADS = 50
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
@@ -34,7 +24,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .3
+EPS_STOP = .15
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
@@ -102,19 +92,19 @@ class Brain:
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
         if self.first_run:
             print("first run")
-            for _ in range(10):
-                v_loss = self.network.train_value(a, r, s, rnn_state, class_weights)
+            for _ in range(100):
+                v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
 
         for _ in range(1):
             time.sleep(0.1)
             v_loss = 0.0
-            #for _ in range(10):
-            #    v_loss = self.network.train_value(a, r, s, rnn_state, class_weights)
-            #print("loss_value2 ", np.mean(v_loss))
+            for _ in range(0):
+                a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
+            print("loss_value2 ", np.mean(v_loss))
 
-            a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, s, rnn_state, class_weights)
+            a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights)
             print("a_loss_policy ", np.mean(a_loss))
             print("x_loss_policy ", np.mean(x_loss))
             print("y_loss_policy ", np.mean(y_loss))
@@ -205,6 +195,7 @@ class Agent:
         a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state =\
             brain.predict(available_actions, [[s[0]], [s[1]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
+        _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
@@ -218,10 +209,10 @@ class Agent:
                 y_spineCrawler = np.random.randint(0, 84)
                 x_Gather = np.random.randint(0, 84)
                 y_Gather = np.random.randint(0, 84)
-            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, self.rnn_state
+            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state
 
         else:
-            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, self.rnn_state
+            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state
 
     def get_sample(self, memory, n):
         s, a, _, _, rnn_sate = memory[0]
@@ -278,7 +269,7 @@ class Agent:
                         print(s[1])
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
                     else:
-                        brain.push_great_game(s, a, r, v, s_, rnn_sate)
+                        #brain.push_great_game(s, a, r, v, s_, rnn_sate)
                         brain.train_push(s, a, r, v, s_, rnn_sate)
 
                 time.sleep(0.1)
@@ -373,7 +364,7 @@ class Environment(threading.Thread):
                 y_Gather = -1
 
             elif a == 10:
-                _ = self.env.make_action(_a, x_Gather, x_Gather)
+                _ = self.env.make_action(_a, x_Gather, y_Gather)
                 x_select_point = -1
                 y_select_point = -1
                 x_spawningPool = -1
@@ -401,7 +392,6 @@ class Environment(threading.Thread):
             if done or self.stop_signal:
                 break
 
-        print("Total R:", R)
 
     def get_state(self, obs):
         return [get_screen_unit_type(obs) / 500.0, np.concatenate((get_player_data(obs), get_available_actions(obs)))]
