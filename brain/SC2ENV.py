@@ -6,7 +6,7 @@ from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 class SC2Game:
     TIMEOUT = 30
     def __init__(self):
-        self.r = redis.StrictRedis(host='192.168.0.15', port=6379, db=0)
+        self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
 
     def new_episode(self):
         data = recv_zipped_pickle(self.r, key="episode")

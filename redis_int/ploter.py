@@ -3,7 +3,7 @@ import redis
 
 from RedisUtil import recv_zipped_pickle
 
-r = redis.StrictRedis(host='192.168.0.15', port=6379, db=0)
+r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
 
 
 import numpy as np
@@ -24,7 +24,11 @@ while True:
     average.append(np.average(y[-100:]))
     if USE_GUI:
         plt.scatter(range(len(average)), average)
-    print("average :", np.average(y[-100:]))
+    print("average :", np.average(y[-100:]), end=" ")
+    print("average(20) :", np.average(y[-20:]), end=" ")
+    print("std :", np.std(y[-100:]), end=" ")
+    print("min :", np.min(y[-100:]), end=" ")
+    print("max :", np.max(y[-100:]))
 
     if USE_GUI:
         plt.axis()

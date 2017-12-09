@@ -24,7 +24,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .15
+EPS_STOP = .2
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
@@ -82,13 +82,13 @@ class Brain:
         rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
 
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-        class_weights = max(np.sum(a[0] + 0.001, axis=0)) / np.sum(a[0] + 0.001, axis=0)
-        class_weights = np.clip(class_weights, 0, 50)
+        class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
+        class_weights = np.clip(class_weights, 0, 5000)
         # _, _, _, v, _ = self.predict(s_, rnn_state)
         # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
         r = r  # set v to 0 where s_ is terminal state
         print("#great games ", len(self.great_queue[0]))
-        print("a sum: ", np.sum(a[0], axis=0))
+        print("a sum: ", np.sum(a[0] == 1, axis=0))
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
         if self.first_run:
             print("first run")
@@ -97,8 +97,8 @@ class Brain:
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
 
-        for _ in range(1):
-            time.sleep(0.1)
+        for _ in range(10):
+            #time.sleep(0.1)
             v_loss = 0.0
             for _ in range(0):
                 a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
@@ -232,6 +232,7 @@ class Agent:
         x_Gather = np.zeros(84)  # turn action into one-hot representation
         y_Gather = np.zeros(84)  # turn action into one-hot representation
         if a[0] != -1:
+            #a_cats = (np.ones(NUM_ACTIONS) * -1) /(NUM_ACTIONS - 1)
             a_cats[a[0]] = 1
         if a[1] != -1:
             x_select_cats[a[1]] = 1
@@ -267,6 +268,7 @@ class Agent:
                 else:
                     if s[1][5 + np.argmax(a[0])] == 0:
                         print(s[1])
+                        print(a)
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
                     else:
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
