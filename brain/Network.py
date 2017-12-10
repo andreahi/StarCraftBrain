@@ -19,7 +19,7 @@ class Network:
 
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
-    LOSS_ENTROPY = 10 # entropy coefficient
+    LOSS_ENTROPY = .01 # entropy coefficient
     WEIGHT_DECAY = 0.0
     def __init__(self):
         self.session = tf.Session(config=tf.ConfigProto(log_device_placement=False))
@@ -319,7 +319,7 @@ class Network:
                        self.state_in[0]: rnn_state[0],
                        self.state_in[1]: rnn_state[1],
                        self.class_weight: class_weights,
-                       self.action_weight: [.00001],
+                       self.action_weight: [.0001],
                        self.value_weight: [1]
                        })
         return a_loss, x_loss, y_loss, v_loss
