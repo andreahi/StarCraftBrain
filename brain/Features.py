@@ -16,7 +16,8 @@ def get_player_data(obs):
         np.array(obs[3]['player'][3], dtype=np.int32),
         np.array(obs[3]['player'][4], dtype=np.float32),
         obs[3]['player'][5],
-        obs[3]['player'][7]
+        obs[3]['player'][7],
+        obs[3]['player'][8]
     ]
     return player_
 

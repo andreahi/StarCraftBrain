@@ -15,7 +15,7 @@ class Network:
     NUM_COORDS_Y = 84
 
     INPUT_IMAGE = 84
-    NUM_SINGLE = 16
+    NUM_SINGLE = 17
 
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
@@ -28,7 +28,7 @@ class Network:
         self._build_graph()
         self.saver = tf.train.Saver(max_to_keep=5)
         self.session.run(tf.global_variables_initializer())
-        self.restore()
+        #self.restore()
 
         self.default_graph = tf.get_default_graph()
 
@@ -57,7 +57,7 @@ class Network:
         type_flatten = self.get_flatten_conv(self.inputs_unit_type)
 
 
-        flatten = tf.concat([type_flatten, self.input_player], axis=1)
+        flatten = tf.concat([ self.input_player], axis=1)
 
         hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
 )
@@ -167,7 +167,7 @@ class Network:
 
         advantage = (self.value - self.r_t)
         advantage = tf.squeeze(advantage)
-        advantage = tf.square(advantage) * tf.sign(advantage)
+        #advantage = tf.square(advantage) * tf.sign(advantage)
         advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
 
         a_log_soft = tf.nn.log_softmax(self.policy)
@@ -223,13 +223,14 @@ class Network:
         # y_entropy =  tf.reduce_sum(self.policy_y * tf.log(self.policy_y + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
 
         # loss_total = tf.reduce_mean(a_loss_policy + x_loss_policy + y_loss_policy + loss_value + entropy)
-        self.a_loss = -tf.reduce_mean(tf.abs(a_loss_policy)) + -a_entropy * self.LOSS_ENTROPY
+        self.a_loss = -tf.reduce_mean(a_loss_policy) + -a_entropy * self.LOSS_ENTROPY
         self.a_loss = tf.Print(self.a_loss, [self.a_loss, tf.shape(self.a_loss)], "self.a_loss: ")
 
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
         optimizer = tf.train.AdamOptimizer(1e-5)
+        #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1))* 0.001 +
                                                                  self.action_weight * (self.a_loss )
@@ -238,7 +239,7 @@ class Network:
                                                                 + self.action_weight * self.x_loss_spineCrawler + self.action_weight * self.y_loss_spineCrawler
                                                                 + self.action_weight * self.x_loss_Gather + self.action_weight * self.y_loss_Gather
                                                                 + self.value_weight * self.v_loss))
-        gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
+        gradients, _ = tf.clip_by_global_norm(gradients, 100.0)
 
         self.minimize = optimizer.apply_gradients(zip(gradients, variables))
 
@@ -268,7 +269,7 @@ class Network:
         # self.minimize = v_optimizer.minimize(self.v_loss)
 
     def get_loss_one(self, advantage, policy, t):
-        a_log_prob = -tf.reduce_sum(t * tf.sign(policy) * policy/tf.stop_gradient(policy), axis=1)
+        a_log_prob = -tf.reduce_sum(t * tf.stop_gradient(tf.sign(policy)) * policy/tf.stop_gradient(policy), axis=1)
         a_loss_policy = a_log_prob * tf.stop_gradient(advantage)
         #entropy
         prob_tf = tf.nn.softmax(policy)
@@ -277,7 +278,7 @@ class Network:
 
         a_entropy = - tf.reduce_mean(mean_prob * tf.log(mean_prob))
 
-        return -tf.reduce_mean(tf.abs(a_loss_policy)) + - a_entropy * self.LOSS_ENTROPY
+        return -tf.reduce_mean(a_loss_policy) + - a_entropy * self.LOSS_ENTROPY
 
     def get_loss(self, advantage, policy, t):
         x_log_soft_select_point = tf.nn.log_softmax(policy)
@@ -319,7 +320,7 @@ class Network:
                        self.state_in[0]: rnn_state[0],
                        self.state_in[1]: rnn_state[1],
                        self.class_weight: class_weights,
-                       self.action_weight: [.0001],
+                       self.action_weight: [.001],
                        self.value_weight: [1]
                        })
         return a_loss, x_loss, y_loss, v_loss
@@ -345,7 +346,7 @@ class Network:
                                                              self.state_in[1]: rnn_state[1],
                                                              self.class_weight: class_weights,
                                                              self.action_weight: [0.0],
-                                                             self.value_weight: [1000.0]
+                                                             self.value_weight: [1.0]
                                                              })
         return v_loss
 
@@ -380,7 +381,7 @@ class Network:
                                      self.state_in[0]: batch_rnn_state[0],
                                      self.state_in[1]: batch_rnn_state[1]})
 
-            a = self.normalized_multinomial(available_actions, policy[0])
+            a = self.normalized_multinomial(available_actions, policy[0], 1)
             x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 1)
             y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 1)
             x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 1)

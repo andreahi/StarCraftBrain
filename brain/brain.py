@@ -24,7 +24,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .2
+EPS_STOP = .1
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
@@ -48,12 +48,12 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 1000 + 100:
+        if len(self.train_queue[0]) < 10000 + 100:
             time.sleep(1)  # yield
             return
 
         with self.lock_queue:
-            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 10000 + 100:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v = self.train_queue
@@ -83,7 +83,7 @@ class Brain:
 
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
         class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-        class_weights = np.clip(class_weights, 0, 5000)
+        class_weights = np.clip(class_weights, 0, 50)
         # _, _, _, v, _ = self.predict(s_, rnn_state)
         # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
         r = r  # set v to 0 where s_ is terminal state
@@ -97,7 +97,7 @@ class Brain:
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
 
-        for _ in range(10):
+        for _ in range(100):
             #time.sleep(0.1)
             v_loss = 0.0
             for _ in range(0):
@@ -266,7 +266,7 @@ class Agent:
                     raise Exception('Should not happen')
                     brain.push_great_game(s, a, r, v, s_, rnn_sate)
                 else:
-                    if s[1][5 + np.argmax(a[0])] == 0:
+                    if s[1][6 + np.argmax(a[0])] == 0:
                         print(s[1])
                         print(a)
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
@@ -274,7 +274,7 @@ class Agent:
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
                         brain.train_push(s, a, r, v, s_, rnn_sate)
 
-                time.sleep(0.1)
+                time.sleep(1)
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
@@ -396,7 +396,7 @@ class Environment(threading.Thread):
 
 
     def get_state(self, obs):
-        return [get_screen_unit_type(obs) / 500.0, np.concatenate((get_player_data(obs), get_available_actions(obs)))]
+        return [np.array( (get_screen_unit_type(obs) / 500.0) >0.0, dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs)))]
 
     def run(self):
         while not self.stop_signal:

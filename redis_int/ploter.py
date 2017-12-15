@@ -26,9 +26,9 @@ while True:
         plt.scatter(range(len(average)), average)
     print("average :", np.average(y[-100:]), end=" ")
     print("average(20) :", np.average(y[-20:]), end=" ")
-    print("std :", np.std(y[-100:]), end=" ")
-    print("min :", np.min(y[-100:]), end=" ")
-    print("max :", np.max(y[-100:]))
+    print("std :", np.std(y[-20:]), end=" ")
+    print("min :", np.min(y[-20:]), end=" ")
+    print("max :", np.max(y[-20:]))
 
     if USE_GUI:
         plt.axis()
