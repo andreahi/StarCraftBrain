@@ -48,12 +48,12 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 10000 + 100:
+        if len(self.train_queue[0]) < 1000 + 100:
             time.sleep(1)  # yield
             return
 
         with self.lock_queue:
-            if len(self.train_queue[0]) < 10000 + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v = self.train_queue
@@ -97,9 +97,10 @@ class Brain:
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
 
-        for _ in range(100):
+        v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
+        for _ in range(10):
             #time.sleep(0.1)
-            v_loss = 0.0
+            #v_loss = 0.0
             for _ in range(0):
                 a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
             print("loss_value2 ", np.mean(v_loss))

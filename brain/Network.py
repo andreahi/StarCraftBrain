@@ -57,7 +57,7 @@ class Network:
         type_flatten = self.get_flatten_conv(self.inputs_unit_type)
 
 
-        flatten = tf.concat([ self.input_player], axis=1)
+        flatten = tf.concat([type_flatten, self.input_player], axis=1)
 
         hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
 )
@@ -167,7 +167,7 @@ class Network:
 
         advantage = (self.value - self.r_t)
         advantage = tf.squeeze(advantage)
-        #advantage = tf.square(advantage) * tf.sign(advantage)
+        advantage = tf.square(advantage*10) * tf.sign(advantage)
         advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
 
         a_log_soft = tf.nn.log_softmax(self.policy)
@@ -175,7 +175,7 @@ class Network:
 
         a_soft = tf.nn.softmax(self.policy)
 
-        a_log_prob = -tf.reduce_sum(self.class_weight * self.a_t * tf.sign(self.policy) * self.policy/tf.stop_gradient(self.policy), axis=1)
+        a_log_prob = -tf.reduce_sum(self.class_weight * self.a_t * tf.stop_gradient(tf.sign(self.policy)) * self.policy/tf.stop_gradient(self.policy), axis=1)
         #a_log_prob = tf.reduce_sum(a_log_soft * self.a_t * self.class_weight, axis=1)
 
         self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point)
@@ -229,10 +229,10 @@ class Network:
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-5)
+        optimizer = tf.train.AdamOptimizer(1e-4)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
-        gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1))* 0.001 +
+        gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.01 +
                                                                  self.action_weight * (self.a_loss )
                                                                 + self.action_weight * self.x_loss_select_point + self.action_weight * self.y_loss_select_point
                                                                 + self.action_weight * self.x_loss_spawningPool + self.action_weight * self.y_loss_spawningPool
@@ -320,7 +320,7 @@ class Network:
                        self.state_in[0]: rnn_state[0],
                        self.state_in[1]: rnn_state[1],
                        self.class_weight: class_weights,
-                       self.action_weight: [.001],
+                       self.action_weight: [.01],
                        self.value_weight: [1]
                        })
         return a_loss, x_loss, y_loss, v_loss
