@@ -13,10 +13,9 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
-THREADS = 50
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
@@ -51,13 +50,13 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 1000 + 100:
+        if len(self.train_queue[0]) < 10000 + 100:
             sample = recv_zipped_pickle(self.r, key="trainingsample")
             self.train_push(*sample)
             return
 
         with self.lock_queue:
-            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 10000 + 100:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v = self.train_queue
@@ -101,10 +100,9 @@ class Brain:
                 print("loss_value ", np.mean(v_loss))
                 self.first_run = False
 
-        v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-        for _ in range(10):
+        for _ in range(1000):
             #time.sleep(0.1)
-            #v_loss = 0.0
+            v_loss = 0.0
             for _ in range(0):
                 a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
             print("loss_value2 ", np.mean(v_loss))
@@ -115,6 +113,7 @@ class Brain:
             print("y_loss_policy ", np.mean(y_loss))
             print("loss_value ", np.mean(v_loss))
 
+        brain.save()
 
             # print "optimized done"
 
@@ -410,9 +409,7 @@ class Environment(threading.Thread):
             try:
                 self.agent.reset()
                 self.runEpisode()
-                if os.path.isfile("models/checkpoint"):
-                    print("loading model")
-                    brain.restore()
+                brain.save()
 
             except Exception as exp:
                 tb = traceback.format_exc()
@@ -447,20 +444,19 @@ NONE_STATE = np.zeros(NUM_STATE)
 
 brain = Brain()  # brain is global in A3C
 
-envs = [Environment() for _ in range(THREADS)]
+opts = [Optimizer() for _ in range(OPTIMIZERS)]
 
+for o in opts:
+    o.start()
 
-
-for e in envs:
-    e.start()
 
 time.sleep(RUN_TIME)
 
-for e in envs:
-    e.stop()
-for e in envs:
-    e.join()
 
+for o in opts:
+    o.stop()
+for o in opts:
+    o.join()
 
 print("Training finished")
 env_test.run()

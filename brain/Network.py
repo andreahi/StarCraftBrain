@@ -19,7 +19,7 @@ class Network:
 
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
-    LOSS_ENTROPY = .01 # entropy coefficient
+    LOSS_ENTROPY = .001 # entropy coefficient
     WEIGHT_DECAY = 0.0
     def __init__(self):
         self.session = tf.Session(config=tf.ConfigProto(log_device_placement=False))
@@ -229,8 +229,8 @@ class Network:
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-4)
-        #optimizer = tf.train.GradientDescentOptimizer(1e-3)
+        #optimizer = tf.train.AdamOptimizer(1e-4)
+        optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.01 +
                                                                  self.action_weight * (self.a_loss )
@@ -381,15 +381,15 @@ class Network:
                                      self.state_in[0]: batch_rnn_state[0],
                                      self.state_in[1]: batch_rnn_state[1]})
 
-            a = self.normalized_multinomial(available_actions, policy[0], 1)
-            x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 1)
-            y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 1)
-            x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 1)
-            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 1)
-            x_spineCrawler = self.normalized_multinomial(1, policy_x_spineCrawler[0], 1)
-            y_spineCrawler = self.normalized_multinomial(1, policy_y_spineCrawler[0], 1)
-            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 1)
-            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 1)
+            a = self.normalized_multinomial(available_actions, policy[0], 10)
+            x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 10)
+            y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 10)
+            x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 10)
+            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 10)
+            x_spineCrawler = self.normalized_multinomial(1, policy_x_spineCrawler[0], 10)
+            y_spineCrawler = self.normalized_multinomial(1, policy_y_spineCrawler[0], 10)
+            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 10)
+            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 10)
 
             if random.random() > 0.99:
                 print("value: ", v)
