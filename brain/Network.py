@@ -7,6 +7,7 @@ from tensorflow.contrib import slim
 
 import numpy as np
 from tensorflow.python.keras._impl.keras.layers import LeakyReLU
+from tensorflow.python.training.optimizer import _OptimizableVariable
 
 
 class Network:
@@ -20,9 +21,10 @@ class Network:
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
     LOSS_ENTROPY = .001 # entropy coefficient
-    WEIGHT_DECAY = 0.0
+    WEIGHT_DECAY = 0.001
     def __init__(self):
         self.session = tf.Session(config=tf.ConfigProto(log_device_placement=False))
+        np.set_printoptions(precision=3)
 
         self._build_model()
         self._build_graph()
@@ -37,31 +39,40 @@ class Network:
         self.default_graph.finalize()  # avoid modifications
 
 
-    @tf.RegisterGradient("CustomGrad5")
-    def _const_mul_grad(unused_op, grad):
-        return 1.0 * grad
+    #@tf.RegisterGradient("CustomGrad5")
+    #def _const_mul_grad(unused_op, grad):
+    #    return 1.0 * grad
 
-    @tf.RegisterGradient("CustomGrad50")
-    def _const_mul_grad(unused_op, grad):
-        return 1.0 * grad
+    #@tf.RegisterGradient("CustomGrad50")
+    #def _const_mul_grad(unused_op, grad):
+    #    return 1.0 * grad
 
     def _build_model(self):
         # Input and visual encoding layers
         self.inputs_unit_type = tf.placeholder(shape=[None, self.INPUT_IMAGE, self.INPUT_IMAGE], dtype=tf.float32,
                                                name="inputs_unit_type")
+        self.inputs_workers = tf.placeholder(shape=[None, self.INPUT_IMAGE, self.INPUT_IMAGE], dtype=tf.float32,
+                                               name="inputs_unit_type")
+
         self.input_player = tf.placeholder(shape=[None, self.NUM_SINGLE], dtype=tf.float32, name="input_player")
 
         # image_unit_type = tf.Print(image_unit_type, [image_unit_type], "image_unit_type: ")
         # image_selected_type = tf.Print(image_selected_type, [image_selected_type], "image_selected_type: ")
 
         type_flatten = self.get_flatten_conv(self.inputs_unit_type)
+        workers_flatten = self.get_flatten_conv(self.inputs_workers)
+        type_flatten_value = self.get_flatten_conv(self.inputs_unit_type)
+        workers_flatten_value = self.get_flatten_conv(self.inputs_workers)
 
 
-        flatten = tf.concat([type_flatten, self.input_player], axis=1)
+        flatten = tf.concat([type_flatten, self.input_player, workers_flatten], axis=1)
+        flatten_value = tf.concat([type_flatten_value, self.input_player, workers_flatten_value], axis=1)
 
-        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-)
+        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
         hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
+
+        value_hidden1 = slim.fully_connected(flatten_value, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
+        value_hidden2 = slim.fully_connected(value_hidden1, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
 
 
         self.batchsize = tf.placeholder(tf.int32, None, name='a')
@@ -133,12 +144,13 @@ class Network:
                                                     weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                                     biases_initializer=None)
 
-        self.value = slim.fully_connected(rnn_out, 1,
+        self.value = slim.fully_connected(value_hidden2, 1,
                                           activation_fn=None,
                                           weights_initializer=normalized_columns_initializer(1.0),
                                           biases_initializer=None)
 
     def _build_graph(self):
+        self.a_policy_target =  tf.placeholder(tf.float32, shape=(None, self.NUM_ACTIONS), name="a_policy_target")
 
         self.x_t_select_point = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_X), name="x_t_select_point")
         self.y_t_select_point = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_Y), name="y_t_select_point")
@@ -167,7 +179,7 @@ class Network:
 
         advantage = (self.value - self.r_t)
         advantage = tf.squeeze(advantage)
-        advantage = tf.square(advantage*10) * tf.sign(advantage)
+        #advantage = tf.square(advantage*10) * tf.sign(advantage)
         advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
 
         a_log_soft = tf.nn.log_softmax(self.policy)
@@ -175,8 +187,8 @@ class Network:
 
         a_soft = tf.nn.softmax(self.policy)
 
-        a_log_prob = -tf.reduce_sum(self.class_weight * self.a_t * tf.stop_gradient(tf.sign(self.policy)) * self.policy/tf.stop_gradient(self.policy), axis=1)
-        #a_log_prob = tf.reduce_sum(a_log_soft * self.a_t * self.class_weight, axis=1)
+        #a_log_prob = -tf.reduce_sum(self.class_weight * self.a_t * tf.sign(self.policy) * self.policy/tf.stop_gradient(self.policy), axis=1)
+        a_log_prob = -tf.reduce_sum(a_log_soft * self.a_t * self.class_weight, axis=1)
 
         self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point)
         self.y_loss_select_point = self.get_loss_one(advantage, self.policy_y_select_point, self.y_t_select_point)
@@ -202,14 +214,19 @@ class Network:
 
         g = tf.get_default_graph()
         # with g.gradient_override_map({"Identity": "CustomGrad5"}):
-        a_loss_policy = tf.identity(a_log_prob * tf.stop_gradient(advantage), name="Identity")  # maximize policy
+        a_loss_policy = a_log_prob * tf.stop_gradient(advantage) # maximize policy
+        a_loss_policy = tf.reduce_mean(self.class_weight * tf.square(self.policy - (10 * self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)),-1)))
+                                       * self.a_t, axis=1)  * tf.stop_gradient(tf.abs(advantage))
 
-        loss_value = tf.identity(tf.square((self.value - self.r_t)), name="Identity")  # minimize value error
+        a_loss_policy = tf.Print(a_loss_policy, [a_loss_policy, tf.shape(a_loss_policy)], "a_loss_policy: ")
+        #a_loss_policy = tf.reduce_mean(a_loss_policy, axis=0)
+        #a_loss_policy = tf.Print(a_loss_policy, [a_loss_policy, tf.shape(a_loss_policy)], "a_loss_policy: ")
+
+        loss_value = tf.abs((self.value - self.r_t))  # minimize value error
         self.reduced_adv = tf.reduce_mean(advantage)
         self.reduced_adv = tf.Print(self.reduced_adv, [self.reduced_adv, tf.shape(self.reduced_adv)],
                                     "self.reduced_adv: ")
 
-        a_loss_policy = tf.Print(a_loss_policy, [a_loss_policy, tf.shape(a_loss_policy)], "a_loss_policy: ")
 
         prob_tf = tf.nn.softmax(self.policy)
         mean_prob = tf.reduce_mean(prob_tf, axis=0)
@@ -229,19 +246,39 @@ class Network:
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        #optimizer = tf.train.AdamOptimizer(1e-4)
-        optimizer = tf.train.GradientDescentOptimizer(1e-3)
+        optimizer = tf.train.AdamOptimizer(1e-6)
+        #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
-        gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.01 +
+        gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
                                                                  self.action_weight * (self.a_loss )
                                                                 + self.action_weight * self.x_loss_select_point + self.action_weight * self.y_loss_select_point
                                                                 + self.action_weight * self.x_loss_spawningPool + self.action_weight * self.y_loss_spawningPool
                                                                 + self.action_weight * self.x_loss_spineCrawler + self.action_weight * self.y_loss_spineCrawler
                                                                 + self.action_weight * self.x_loss_Gather + self.action_weight * self.y_loss_Gather
-                                                                + self.value_weight * self.v_loss))
-        gradients, _ = tf.clip_by_global_norm(gradients, 100.0)
+                                                               ))
 
-        self.minimize = optimizer.apply_gradients(zip(gradients, variables))
+        self.minimize = optimizer.minimize(a_loss_policy
+                                           + self.x_loss_select_point
+                                           + self.y_loss_select_point
+                                           + self.x_loss_spawningPool
+                                           + self.y_loss_spawningPool
+                                           + self.x_loss_spineCrawler
+                                           + self.y_loss_spineCrawler
+                                           + self.x_loss_Gather
+                                           + self.y_loss_Gather
+                                           )
+        #gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
+
+        #self.minimize = optimizer.apply_gradients(zip(gradients, variables))
+
+
+
+        gradients_value, variables_value = zip(*optimizer.compute_gradients( self.value_weight * self.v_loss))
+        gradients_value, _ = tf.clip_by_global_norm(gradients_value, 10.0)
+
+        optimizer_value = tf.train.AdamOptimizer(1e-5)
+        self.minimize_value = optimizer_value.minimize(self.value_weight * self.v_loss)
+        #self.minimize_value = optimizer.apply_gradients(zip(gradients_value, variables_value))
 
         # optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE)
 
@@ -269,7 +306,10 @@ class Network:
         # self.minimize = v_optimizer.minimize(self.v_loss)
 
     def get_loss_one(self, advantage, policy, t):
-        a_log_prob = -tf.reduce_sum(t * tf.stop_gradient(tf.sign(policy)) * policy/tf.stop_gradient(policy), axis=1)
+        #a_log_prob = -tf.reduce_sum(t * tf.stop_gradient(tf.sign(policy)) * policy/tf.stop_gradient(policy), axis=1)
+        a_log_soft = tf.nn.log_softmax(policy)
+        a_log_prob = -tf.reduce_sum(a_log_soft * t, axis=1)
+
         a_loss_policy = a_log_prob * tf.stop_gradient(advantage)
         #entropy
         prob_tf = tf.nn.softmax(policy)
@@ -277,14 +317,19 @@ class Network:
         mean_prob = tf.Print(mean_prob, [mean_prob, tf.shape(mean_prob)], "mean_prob: ")
 
         a_entropy = - tf.reduce_mean(mean_prob * tf.log(mean_prob))
+        value_regulizer = tf.reduce_mean(tf.reduce_mean(np.square(policy), axis=1)) * 0.001
 
-        return -tf.reduce_mean(a_loss_policy) + - a_entropy * self.LOSS_ENTROPY
+        loss = tf.reduce_mean(
+            tf.square(policy - (10 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
+            * t, axis=1) * tf.stop_gradient(tf.abs(advantage))
+        return loss
+
+        #return -tf.reduce_mean(a_loss_policy) + value_regulizer
 
     def get_loss(self, advantage, policy, t):
         x_log_soft_select_point = tf.nn.log_softmax(policy)
         x_log_prob_select_point = tf.reduce_sum(x_log_soft_select_point * t, axis=1)
-        x_loss_policy_select_point = tf.identity((- x_log_prob_select_point * tf.stop_gradient(advantage)),
-                                                 name="Identity")  # maximize policy
+        x_loss_policy_select_point = - x_log_prob_select_point * tf.stop_gradient(advantage)
 
         #entropy
         log_prob_tf = tf.nn.log_softmax(policy)
@@ -299,11 +344,13 @@ class Network:
         value = tf.squeeze(tf.multinomial(self.weights, 1), [1])
         return tf.one_hot(value, d)
 
-    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights):
+    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy):
 
-        _, a_loss, x_loss, y_loss, v_loss, reduced_adv = self.session.run(
-            [self.minimize, self.a_loss, self.x_loss_select_point, self.y_loss_select_point, self.v_loss, self.reduced_adv],
-            feed_dict={self.inputs_unit_type: s[0],
+        _, a_loss, x_loss, y_loss, reduced_adv = self.session.run(
+            [self.minimize, self.a_loss, self.x_loss_select_point, self.y_loss_select_point, self.reduced_adv],
+            feed_dict={
+                       self.inputs_unit_type: s[0],
+                       self.inputs_workers: s[2],
                        self.input_player: s[1],
                        self.a_t: a[0],
                        self.x_t_select_point: a[1],
@@ -320,16 +367,18 @@ class Network:
                        self.state_in[0]: rnn_state[0],
                        self.state_in[1]: rnn_state[1],
                        self.class_weight: class_weights,
-                       self.action_weight: [.01],
-                       self.value_weight: [1]
+                       self.action_weight: [1],
+                       self.value_weight: [.00000],
+                       self.a_policy_target: a_policy
                        })
-        return a_loss, x_loss, y_loss, v_loss
+        return a_loss, x_loss, y_loss
 
     def train_value(self, a, r, v, v_toggle, s, rnn_state, class_weights):
 
-        _, v_loss, reduced_adv = self.session.run([self.minimize, self.v_loss, self.reduced_adv],
+        _, v_loss, reduced_adv = self.session.run([self.minimize_value, self.v_loss, self.reduced_adv],
                                                   feed_dict={self.inputs_unit_type: s[0],
                                                              self.input_player: s[1],
+                                                             self.inputs_workers: s[2],
                                                              self.a_t: a[0],
                                                              self.x_t_select_point: a[1],
                                                              self.y_t_select_point: a[2],
@@ -346,7 +395,7 @@ class Network:
                                                              self.state_in[1]: rnn_state[1],
                                                              self.class_weight: class_weights,
                                                              self.action_weight: [0.0],
-                                                             self.value_weight: [1.0]
+                                                             self.value_weight: [.001]
                                                              })
         return v_loss
 
@@ -377,26 +426,28 @@ class Network:
                                  feed_dict={
                                      self.available_actions: available_actions,
                                      self.inputs_unit_type: s[0],
+                                     self.inputs_workers: s[2],
                                      self.input_player: s[1],
                                      self.state_in[0]: batch_rnn_state[0],
                                      self.state_in[1]: batch_rnn_state[1]})
 
-            a = self.normalized_multinomial(available_actions, policy[0], 10)
+            a = self.normalized_multinomial(available_actions, policy[0], 1)
             x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 10)
             y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 10)
             x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 10)
-            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 10)
+            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 100)
             x_spineCrawler = self.normalized_multinomial(1, policy_x_spineCrawler[0], 10)
             y_spineCrawler = self.normalized_multinomial(1, policy_y_spineCrawler[0], 10)
-            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 10)
-            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 10)
+            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 10000)
+            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 10000)
 
             if random.random() > 0.99:
                 print("value: ", v)
                 print("policy: ", policy)
                 print("policy_x: ", x_select_point)
                 print("policy_y: ", y_select_point)
-            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, state_out
+                print("x: ", policy_x_select_point)
+            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, state_out, policy[0]
 
     def normalized_multinomial(self, available_actions, policy, n=1):
         policy = policy - min(policy)

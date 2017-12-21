@@ -49,75 +49,6 @@ class Brain:
         self.first_run = True
         self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
 
-    def optimize(self):
-        #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 1000 + 100:
-            sample = recv_zipped_pickle(self.r, key="trainingsample")
-            self.train_push(*sample)
-            return
-
-        with self.lock_queue:
-            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
-                return  # we can't yield inside lock
-
-            s, a, r, s_, s_mask, rnn_state, v = self.train_queue
-            self.train_queue = [[], [], [], [], [], [], []]
-            self.train_queue = copy.deepcopy(self.great_queue)
-
-            GREAT_GAME_SIZE = 1000
-            if len(self.great_queue[0])> GREAT_GAME_SIZE:
-                del self.great_queue[0][0:len(self.great_queue[0]) - GREAT_GAME_SIZE]
-                del self.great_queue[1][0:len(self.great_queue[1]) - GREAT_GAME_SIZE]
-                del self.great_queue[2][0:len(self.great_queue[2]) - GREAT_GAME_SIZE]
-                del self.great_queue[3][0:len(self.great_queue[3]) - GREAT_GAME_SIZE]
-                del self.great_queue[4][0:len(self.great_queue[4]) - GREAT_GAME_SIZE]
-                del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
-                del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
-
-        print("prepping training data")
-        s = [self.to_array(s, 0), self.to_array(s, 1)]
-        # s = np.stack(s, axis=1)
-        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
-        r = np.vstack(r)
-        v = np.vstack(v)
-        # s_ = np.stack(s_, axis=1)
-        s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
-        s_mask = np.vstack(s_mask)
-        rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
-
-        if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-        class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-        class_weights = np.clip(class_weights, 0, 500)
-        # _, _, _, v, _ = self.predict(s_, rnn_state)
-        # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-        r = r  # set v to 0 where s_ is terminal state
-        print("#great games ", len(self.great_queue[0]))
-        print("a sum: ", np.sum(a[0] == 1, axis=0))
-        print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
-        if self.first_run:
-            print("first run")
-            for _ in range(100):
-                v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-                print("loss_value ", np.mean(v_loss))
-                self.first_run = False
-
-        v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-        for _ in range(10):
-            #time.sleep(0.1)
-            #v_loss = 0.0
-            for _ in range(0):
-                a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-            print("loss_value2 ", np.mean(v_loss))
-
-            a_loss, x_loss, y_loss, v_loss = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights)
-            print("a_loss_policy ", np.mean(a_loss))
-            print("x_loss_policy ", np.mean(x_loss))
-            print("y_loss_policy ", np.mean(y_loss))
-            print("loss_value ", np.mean(v_loss))
-
-
-            # print "optimized done"
-
     def to_array(self, s, idx):
         return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
 
@@ -198,8 +129,8 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state =\
-            brain.predict(available_actions, [[s[0]], [s[1]]],
+        a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state, a_policy =\
+            brain.predict(available_actions, [[s[0]], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
@@ -215,18 +146,16 @@ class Agent:
                 y_spineCrawler = np.random.randint(0, 84)
                 x_Gather = np.random.randint(0, 84)
                 y_Gather = np.random.randint(0, 84)
-            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state
 
-        else:
-            return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state
+        return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state, a_policy
 
     def get_sample(self, memory, n):
-        s, a, _, _, rnn_sate = memory[0]
-        _, _, _, s_, _ = memory[n - 1]
+        s, a, _, _, rnn_sate, a_policy = memory[0]
+        _, _, _, s_, _, _ = memory[n - 1]
 
-        return s, a, self.R, s_, rnn_sate
+        return s, a, self.R, s_, rnn_sate, a_policy
 
-    def train(self, s, a, r, v, s_, rnn_sate):
+    def train(self, s, a, r, v, s_, rnn_sate, a_policy):
 
         a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
         x_select_cats = np.zeros(84)  # turn action into one-hot representation
@@ -257,17 +186,17 @@ class Agent:
         if a[8] != -1:
             y_Gather[a[8]] = 1
 
-        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, y_select_cats, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather]), np.copy(r), s_, rnn_sate))
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, y_select_cats, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather]), np.copy(r), s_, rnn_sate, a_policy))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
         if s_ is None:
-            _, _, end_r, _, rnn_sate = self.get_sample(self.memory, len(self.memory))
+            _, _, end_r, _, rnn_sate, a_policy = self.get_sample(self.memory, len(self.memory))
             if r > 20:
                 print("I did geat! ", r)
             while len(self.memory) > 0:
                 n = len(self.memory)
-                s, a, r, s_, rnn_sate = self.get_sample(self.memory, n)
+                s, a, r, s_, rnn_sate, a_policy = self.get_sample(self.memory, n)
                 if r > 99:
                     raise Exception('Should not happen')
                     brain.push_great_game(s, a, r, v, s_, rnn_sate)
@@ -277,11 +206,14 @@ class Agent:
                         print(a)
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
                     else:
+                        if a[1][0] == 1 or a[0][0] == 1:
+                            send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
+
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
-                        send_zipped_pickle(self.r, [s, a, r, v, s_, rnn_sate], key="trainingsample")
+                        send_zipped_pickle(self.r, [s, a, r, v, s_, rnn_sate, a_policy], key="trainingsample")
                         #brain.train_push(s, a, r, v, s_, rnn_sate)
 
-                time.sleep(1)
+                time.sleep(0)
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
@@ -310,6 +242,7 @@ class Environment(threading.Thread):
         self.render = render
         self.env = SC2Game()
         self.agent = Agent(eps_start, eps_end, eps_steps)
+        self.lock_queue = threading.Lock()
 
     def runEpisode(self):
         # s = self.env.reset()
@@ -336,7 +269,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, _rnn_state = self.agent.act(s, _available_actions)
+            a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -344,6 +277,14 @@ class Environment(threading.Thread):
                 _a = a
             else:
                 _a = 0
+                x_select_point = -1
+                y_select_point = -1
+                x_spawningPool = -1
+                y_spawningPool = -1
+                x_spineCrawler = -1
+                y_spineCrawler = -1
+                x_Gather = -1
+                y_Gather = -1
 
             if a == 2:
                 _ = self.env.make_action(_a, x_select_point, y_select_point)
@@ -391,8 +332,8 @@ class Environment(threading.Thread):
                 # s_ = self.get_state(obs)
             else:
                 s_ = self.get_state(obs)
-
-            self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state)
+                with self.lock_queue:
+                    self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_
@@ -403,7 +344,7 @@ class Environment(threading.Thread):
 
 
     def get_state(self, obs):
-        return [np.array( (get_screen_unit_type(obs) / 500.0) >0.0, dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs)))]
+        return [np.array( (get_screen_unit_type(obs) == 89), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) == 104), dtype="float32" )]
 
     def run(self):
         while not self.stop_signal:
