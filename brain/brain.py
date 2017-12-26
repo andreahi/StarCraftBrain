@@ -6,11 +6,11 @@ import traceback
 import redis
 from keras.models import *
 
-from Actions import get_screen_acions, get_action_map
-from Features import get_screen_unit_type, get_available_actions, get_player_data
-from Network import Network
-from RandomUtils import weighted_random_index
-from SC2ENV import SC2Game
+from brain.Actions import get_screen_acions, get_action_map
+from brain.Features import get_screen_unit_type, get_available_actions, get_player_data
+from brain.Network import Network
+from brain.RandomUtils import weighted_random_index
+from brain.SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -191,6 +191,7 @@ class Agent:
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
         if s_ is None:
+	    
             _, _, end_r, _, rnn_sate, a_policy = self.get_sample(self.memory, len(self.memory))
             if r > 20:
                 print("I did geat! ", r)
@@ -208,7 +209,6 @@ class Agent:
                     else:
                         if a[1][0] == 1 or a[0][0] == 1:
                             send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
-
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
                         send_zipped_pickle(self.r, [s, a, r, v, s_, rnn_sate, a_policy], key="trainingsample")
                         #brain.train_push(s, a, r, v, s_, rnn_sate)
@@ -276,15 +276,8 @@ class Environment(threading.Thread):
             if _available_actions[a] == 1:
                 _a = a
             else:
+                print("trid to do invalid action")
                 _a = 0
-                x_select_point = -1
-                y_select_point = -1
-                x_spawningPool = -1
-                y_spawningPool = -1
-                x_spineCrawler = -1
-                y_spineCrawler = -1
-                x_Gather = -1
-                y_Gather = -1
 
             if a == 2:
                 _ = self.env.make_action(_a, x_select_point, y_select_point)
@@ -324,16 +317,25 @@ class Environment(threading.Thread):
 
             else:
                 _ = self.env.make_action(_a, -1, -1)
+                x_select_point = -1
+                y_select_point = -1
+                x_spawningPool = -1
+                y_spawningPool = -1
+                x_spineCrawler = -1
+                y_spineCrawler = -1
+                x_Gather = -1
+                y_Gather = -1
 
             done, obs, r = self.env.get_state()
 
             if done:  # terminal state
                 s_ = None
+                print("done and none")
                 # s_ = self.get_state(obs)
             else:
                 s_ = self.get_state(obs)
-                with self.lock_queue:
-                    self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state, a_policy)
+            with self.lock_queue:
+                   self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_

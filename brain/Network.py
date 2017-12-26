@@ -30,7 +30,7 @@ class Network:
         self._build_graph()
         self.saver = tf.train.Saver(max_to_keep=5)
         self.session.run(tf.global_variables_initializer())
-        #self.restore()
+        self.restore()
 
         self.default_graph = tf.get_default_graph()
 
@@ -246,7 +246,7 @@ class Network:
         self.v_loss = tf.reduce_mean(loss_value)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-6)
+        optimizer = tf.train.AdamOptimizer(1e-4)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
@@ -395,7 +395,7 @@ class Network:
                                                              self.state_in[1]: rnn_state[1],
                                                              self.class_weight: class_weights,
                                                              self.action_weight: [0.0],
-                                                             self.value_weight: [.001]
+                                                             self.value_weight: [1]
                                                              })
         return v_loss
 
@@ -435,11 +435,11 @@ class Network:
             x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 10)
             y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 10)
             x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 10)
-            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 100)
+            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 10)
             x_spineCrawler = self.normalized_multinomial(1, policy_x_spineCrawler[0], 10)
             y_spineCrawler = self.normalized_multinomial(1, policy_y_spineCrawler[0], 10)
-            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 10000)
-            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 10000)
+            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 100)
+            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 100)
 
             if random.random() > 0.99:
                 print("value: ", v)

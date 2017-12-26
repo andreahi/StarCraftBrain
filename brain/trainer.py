@@ -6,14 +6,14 @@ import traceback
 import redis
 from keras.models import *
 
-from Actions import get_screen_acions, get_action_map
-from Features import get_screen_unit_type, get_available_actions, get_player_data
-from Network import Network
-from RandomUtils import weighted_random_index
-from SC2ENV import SC2Game
+from brain.Actions import get_screen_acions, get_action_map
+from brain.Features import get_screen_unit_type, get_available_actions, get_player_data
+from brain.Network import Network
+from brain.RandomUtils import weighted_random_index
+from brain.SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
 OPTIMIZERS = 1
@@ -50,13 +50,12 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 1000 + 100:
+        if len(self.train_queue[0]) < 10000 + 100:
             sample = recv_zipped_pickle(self.r, key="trainingsample")
             self.train_push(*sample)
             return
-
         with self.lock_queue:
-            if len(self.train_queue[0]) < 1000 + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 10000 + 100:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
@@ -110,7 +109,7 @@ class Brain:
         v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
         print("loss_value2 ", np.mean(v_loss2))
 
-        for _ in range(10):
+        for _ in range(100):
             v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
             print("loss_value2 ", np.mean(v_loss2))
 
