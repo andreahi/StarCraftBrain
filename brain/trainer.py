@@ -72,34 +72,36 @@ class Brain:
                 del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
                 del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
 
-        with self.gpu_lock:
-            print("prepping training data")
-            s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
-            # s = np.stack(s, axis=1)
-            a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
-            r = np.vstack(r)
-            v = np.vstack(v)
-            a_policy = np.vstack(a_policy)
-            # s_ = np.stack(s_, axis=1)
-            s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
-            for i in range(0, len(a)):
-                if r[i] > v[i]:
-                    a_policy[i][np.argmax(a[0][i])] = 10
-                else:
-                    a_policy[i][np.argmax(a[0][i])] = -10
-            s_mask = np.vstack(s_mask)
-            rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
+        print("prepping training data")
+        s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
+        # s = np.stack(s, axis=1)
+        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
+        r = np.vstack(r)
+        v = np.vstack(v)
+        a_policy = np.vstack(a_policy)
+        # s_ = np.stack(s_, axis=1)
+        s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
+        for i in range(0, len(a)):
+            if r[i] > v[i]:
+                a_policy[i][np.argmax(a[0][i])] = 10
+            else:
+                a_policy[i][np.argmax(a[0][i])] = -10
+        s_mask = np.vstack(s_mask)
+        rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
 
-            if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-            class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-            class_weights = np.clip(class_weights, 1, 100)
-            # _, _, _, v, _ = self.predict(s_, rnn_state)
-            # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-            r = r  # set v to 0 where s_ is terminal state
-            print("#great games ", len(self.great_queue[0]))
-            print("a sum: ", np.sum(a[0] == 1, axis=0))
-            print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
-            print("rnn : ", rnn_state)
+        if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
+        class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
+        class_weights = np.clip(class_weights, 1, 100)
+        # _, _, _, v, _ = self.predict(s_, rnn_state)
+        # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
+        r = r  # set v to 0 where s_ is terminal state
+        print("#great games ", len(self.great_queue[0]))
+        print("a sum: ", np.sum(a[0] == 1, axis=0))
+        print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
+        print("rnn : ", rnn_state)
+
+        with self.gpu_lock:
+
             if self.first_run:
                 print("first run")
                 self.first_run = False
