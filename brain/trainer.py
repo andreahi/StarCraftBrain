@@ -55,11 +55,14 @@ class Brain:
         #with self.read_lock:
         while len(self.train_queue[0]) < 500:
             sample = recv_zipped_pickle(self.r, key="trainingsample")
-            self.train_push(*sample)
+            with self.read_lock:
+                self.train_push(*sample)
 
-
-        s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
-        self.train_queue = [[], [], [], [], [], [], [], []]
+        with self.read_lock:
+            if len(self.train_queue[0]) < 500:
+                return
+            s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
+            self.train_queue = [[], [], [], [], [], [], [], []]
         #self.train_queue = copy.deepcopy(self.great_queue)
 
         GREAT_GAME_SIZE = 1000
