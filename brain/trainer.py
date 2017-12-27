@@ -16,7 +16,7 @@ from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
-OPTIMIZERS = 10
+OPTIMIZERS = 3
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -53,13 +53,13 @@ class Brain:
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
-        while len(self.train_queue[0]) < 500:
+        while len(self.train_queue[0]) < 5000:
             sample = recv_zipped_pickle(self.r, key="trainingsample")
             with self.read_lock:
                 self.train_push(*sample)
 
-        with self.read_lock:
-            if len(self.train_queue[0]) < 500:
+        with self.read_lock:0
+            if len(self.train_queue[0]) < 5000:
                 return
             s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
             self.train_queue = [[], [], [], [], [], [], [], []]
