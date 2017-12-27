@@ -30,7 +30,7 @@ class Network:
         self._build_graph()
         self.saver = tf.train.Saver(max_to_keep=5)
         self.session.run(tf.global_variables_initializer())
-        self.restore()
+        #self.restore()
 
         self.default_graph = tf.get_default_graph()
 
@@ -84,6 +84,7 @@ class Network:
         self.state_in = lstm_cell.zero_state(tf.shape(hidden2)[0], tf.float32)
 
         rnn_out, self.state_out = lstm_cell(hidden2, self.state_in)
+        rnn_v = rnn_out
         rnn_out = hidden2
 
         # Output layers for policy and value estimations
@@ -144,7 +145,7 @@ class Network:
                                                     weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                                     biases_initializer=None)
 
-        self.value = slim.fully_connected(value_hidden2, 1,
+        self.value = slim.fully_connected(rnn_v, 1,
                                           activation_fn=None,
                                           weights_initializer=normalized_columns_initializer(1.0),
                                           biases_initializer=None)

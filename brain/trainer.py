@@ -50,12 +50,12 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        if len(self.train_queue[0]) < 10000 + 100:
+        if len(self.train_queue[0]) < 500:
             sample = recv_zipped_pickle(self.r, key="trainingsample")
             self.train_push(*sample)
             return
         with self.lock_queue:
-            if len(self.train_queue[0]) < 10000 + 100:  # more thread could have passed without lock
+            if len(self.train_queue[0]) < 500:  # more thread could have passed without lock
                 return  # we can't yield inside lock
 
             s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
@@ -98,18 +98,16 @@ class Brain:
         print("#great games ", len(self.great_queue[0]))
         print("a sum: ", np.sum(a[0] == 1, axis=0))
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
-
+        print("rnn : ", rnn_state)
         if self.first_run:
             print("first run")
             self.first_run = False
-            for _ in range(100):
+            for _ in range(10):
                 v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value ", np.mean(v_loss))
 
-        v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-        print("loss_value2 ", np.mean(v_loss2))
 
-        for _ in range(100):
+        for _ in range(0):
             v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
             print("loss_value2 ", np.mean(v_loss2))
 
@@ -124,6 +122,9 @@ class Brain:
             print("x_loss_policy ", np.mean(x_loss))
             print("y_loss_policy ", np.mean(y_loss))
 
+        for _ in range(1):
+            v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
+            print("loss_value2 ", np.mean(v_loss2))
 
         brain.save()
 
