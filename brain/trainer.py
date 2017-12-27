@@ -16,7 +16,7 @@ from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
-OPTIMIZERS = 2
+OPTIMIZERS = 10
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -52,25 +52,25 @@ class Brain:
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
-        with self.read_lock:
-            while len(self.train_queue[0]) < 500:
-                sample = recv_zipped_pickle(self.r, key="trainingsample")
-                self.train_push(*sample)
+        #with self.read_lock:
+        while len(self.train_queue[0]) < 500:
+            sample = recv_zipped_pickle(self.r, key="trainingsample")
+            self.train_push(*sample)
 
 
-            s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
-            self.train_queue = [[], [], [], [], [], [], [], []]
-            #self.train_queue = copy.deepcopy(self.great_queue)
+        s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
+        self.train_queue = [[], [], [], [], [], [], [], []]
+        #self.train_queue = copy.deepcopy(self.great_queue)
 
-            GREAT_GAME_SIZE = 1000
-            if len(self.great_queue[0])> GREAT_GAME_SIZE:
-                del self.great_queue[0][0:len(self.great_queue[0]) - GREAT_GAME_SIZE]
-                del self.great_queue[1][0:len(self.great_queue[1]) - GREAT_GAME_SIZE]
-                del self.great_queue[2][0:len(self.great_queue[2]) - GREAT_GAME_SIZE]
-                del self.great_queue[3][0:len(self.great_queue[3]) - GREAT_GAME_SIZE]
-                del self.great_queue[4][0:len(self.great_queue[4]) - GREAT_GAME_SIZE]
-                del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
-                del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
+        GREAT_GAME_SIZE = 1000
+        if len(self.great_queue[0])> GREAT_GAME_SIZE:
+            del self.great_queue[0][0:len(self.great_queue[0]) - GREAT_GAME_SIZE]
+            del self.great_queue[1][0:len(self.great_queue[1]) - GREAT_GAME_SIZE]
+            del self.great_queue[2][0:len(self.great_queue[2]) - GREAT_GAME_SIZE]
+            del self.great_queue[3][0:len(self.great_queue[3]) - GREAT_GAME_SIZE]
+            del self.great_queue[4][0:len(self.great_queue[4]) - GREAT_GAME_SIZE]
+            del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
+            del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
 
         print("prepping training data")
         s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
