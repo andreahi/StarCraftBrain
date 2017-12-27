@@ -58,7 +58,7 @@ class Brain:
             with self.read_lock:
                 self.train_push(*sample)
 
-        with self.read_lock:0
+        with self.read_lock:
             if len(self.train_queue[0]) < 5000:
                 return
             s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
