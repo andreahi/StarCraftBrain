@@ -14,7 +14,7 @@ def recv_range(socket, key="trainingsample", count=1):
     while socket.llen(key) < count:
         time.sleep(0.1)
     data_l = socket.lrange(key, 0, count)
-    socket.ltrim(500, -1)
+    socket.ltrim(key, 500, -1)
     return [zlib.decompress(x) for x in data_l ]
 
 def recv_zipped_pickle(socket, key="trainingset", blocking=True, timeout=0):
