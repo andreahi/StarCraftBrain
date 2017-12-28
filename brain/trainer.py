@@ -11,7 +11,7 @@ from brain.Features import get_screen_unit_type, get_available_actions, get_play
 from brain.Network import Network
 from brain.RandomUtils import weighted_random_index
 from brain.SC2ENV import SC2Game
-from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
+from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle, recv_range
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -39,8 +39,6 @@ episode_counter = 0
 
 # ---------
 class Brain:
-    train_queue = [[], [], [], [], [], [], [], []]  # s, a, r, s', s' terminal mask
-    great_queue = [[], [], [], [], [], [], []]  # s, a, r, s', s' terminal mask
     lock_queue = threading.Lock()
     read_lock = threading.Lock()
     gpu_lock = threading.Lock()
@@ -53,10 +51,10 @@ class Brain:
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
-        while len(self.train_queue[0]) < 5000:
-            sample = recv_zipped_pickle(self.r, key="trainingsample")
-            with self.read_lock:
-                self.train_push(*sample)
+        train_queue = [[], [], [], [], [], [], [], []]
+        samples = recv_range(self.r, key="trainingsample", count=500)
+        for sample in samples:
+            self.train_push(train_queue, *sample)
 
         with self.read_lock:
             if len(self.train_queue[0]) < 5000:
@@ -65,15 +63,6 @@ class Brain:
             self.train_queue = [[], [], [], [], [], [], [], []]
         #self.train_queue = copy.deepcopy(self.great_queue)
 
-        GREAT_GAME_SIZE = 1000
-        if len(self.great_queue[0])> GREAT_GAME_SIZE:
-            del self.great_queue[0][0:len(self.great_queue[0]) - GREAT_GAME_SIZE]
-            del self.great_queue[1][0:len(self.great_queue[1]) - GREAT_GAME_SIZE]
-            del self.great_queue[2][0:len(self.great_queue[2]) - GREAT_GAME_SIZE]
-            del self.great_queue[3][0:len(self.great_queue[3]) - GREAT_GAME_SIZE]
-            del self.great_queue[4][0:len(self.great_queue[4]) - GREAT_GAME_SIZE]
-            del self.great_queue[5][0:len(self.great_queue[5]) - GREAT_GAME_SIZE]
-            del self.great_queue[6][0:len(self.great_queue[6]) - GREAT_GAME_SIZE]
 
         print("prepping training data")
         s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
@@ -145,22 +134,22 @@ class Brain:
     def restore(self):
         self.network.restore()
 
-    def train_push(self, s, a, r, v, s_, rnn_state, a_policy):
+    def train_push(self, train_queue, s, a, r, v, s_, rnn_state, a_policy):
         with self.lock_queue:
-            self.train_queue[0].append(s)
-            self.train_queue[1].append(a)
-            self.train_queue[2].append(r)
+            train_queue[0].append(s)
+            train_queue[1].append(a)
+            train_queue[2].append(r)
 
             if s_ is None:
-                self.train_queue[3].append(s)
-                self.train_queue[4].append(0.)
+                train_queue[3].append(s)
+                train_queue[4].append(0.)
             else:
-                self.train_queue[3].append(s_)
-                self.train_queue[4].append(1.)
+                train_queue[3].append(s_)
+                train_queue[4].append(1.)
 
-            self.train_queue[5].append(rnn_state)
-            self.train_queue[6].append(v)
-            self.train_queue[7].append(a_policy)
+            train_queue[5].append(rnn_state)
+            train_queue[6].append(v)
+            train_queue[7].append(a_policy)
 
     def push_great_game(self, s, a, r, v, s_, rnn_state):
         with self.lock_queue:

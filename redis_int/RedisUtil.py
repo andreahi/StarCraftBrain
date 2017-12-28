@@ -1,6 +1,7 @@
 import pickle
 
 import zlib
+import time
 
 
 def send_zipped_pickle(socket, obj, key="trainingset", protocol=-1):
@@ -8,6 +9,13 @@ def send_zipped_pickle(socket, obj, key="trainingset", protocol=-1):
     p = pickle.dumps(obj, protocol)
     z = zlib.compress(p)
     return socket.rpush(key, z)
+
+def recv_range(socket, key="trainingsample", count=1):
+    while socket.llen(key) < count:
+        time.sleep(0.1)
+    data_l = socket.lrange(0, count)
+    socket.ltrim(500, -1)
+    return [zlib.decompress(x) for x in data_l ]
 
 def recv_zipped_pickle(socket, key="trainingset", blocking=True, timeout=0):
     """inverse of send_zipped_pickle"""
