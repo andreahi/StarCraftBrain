@@ -83,7 +83,7 @@ class Network:
         lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(100)
         self.state_in = lstm_cell.zero_state(tf.shape(hidden2)[0], tf.float32)
 
-        rnn_out, self.state_out = lstm_cell(hidden2, self.state_in)
+        rnn_out, self.state_out = lstm_cell(value_hidden2, self.state_in)
         rnn_v = rnn_out
         rnn_out = hidden2
 
