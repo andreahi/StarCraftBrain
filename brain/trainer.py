@@ -93,7 +93,8 @@ class Brain:
                 print("first run")
                 self.first_run = False
                 for _ in range(10):
-                    v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
+                    idx = np.random.randint(len(a), size=1000)
+                    v_loss = self.network.train_value(a[idx], r[idx], r[idx], np.ones(shape=(len(v), 1)), s[idx], rnn_state[idx], class_weights)
                     print("loss_value ", np.mean(v_loss))
 
 
