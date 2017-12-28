@@ -47,12 +47,14 @@ class Brain:
         self.network = Network()
         self.first_run = True
         self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+        self.lastTime = time.clock()
+
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_range(self.r, key="trainingsample", count=500)
+        samples = recv_range(self.r, key="trainingsample", count=1000)
         for sample in samples:
             self.train_push(train_queue, *sample)
 
@@ -95,7 +97,7 @@ class Brain:
                     print("loss_value ", np.mean(v_loss))
 
 
-            for _ in range(0):
+            for _ in range(1):
                 v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
 
@@ -110,11 +112,13 @@ class Brain:
                 print("x_loss_policy ", np.mean(x_loss))
                 print("y_loss_policy ", np.mean(y_loss))
 
-            for _ in range(1):
+            for _ in range(0):
                 v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
-
-            brain.save()
+            if((time.clock() - self.lastTime) > 60):
+                print("saving model")
+                brain.save()
+                self.lastTime = time.clock()
 
             # print "optimized done"
 
@@ -180,6 +184,8 @@ class Optimizer(threading.Thread):
     def run(self):
         while not self.stop_signal:
             brain.optimize()
+            
+            
 
     def stop(self):
         self.stop_signal = True

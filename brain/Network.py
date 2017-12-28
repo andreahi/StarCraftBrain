@@ -30,7 +30,7 @@ class Network:
         self._build_graph()
         self.saver = tf.train.Saver(max_to_keep=5)
         self.session.run(tf.global_variables_initializer())
-        #self.restore()
+        self.restore()
 
         self.default_graph = tf.get_default_graph()
 
