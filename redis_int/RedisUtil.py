@@ -15,7 +15,7 @@ def recv_range(socket, key="trainingsample", count=1):
         time.sleep(0.1)
     data_l = socket.lrange(key, 0, count)
     socket.ltrim(key, 500, -1)
-    return [zlib.decompress(x) for x in data_l ]
+    return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
 
 def recv_zipped_pickle(socket, key="trainingset", blocking=True, timeout=0):
     """inverse of send_zipped_pickle"""

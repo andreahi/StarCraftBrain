@@ -54,7 +54,6 @@ class Brain:
         train_queue = [[], [], [], [], [], [], [], []]
         samples = recv_range(self.r, key="trainingsample", count=500)
         for sample in samples:
-            print(sample)
             self.train_push(train_queue, *sample)
 
         s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
@@ -82,7 +81,6 @@ class Brain:
         # _, _, _, v, _ = self.predict(s_, rnn_state)
         # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
         r = r  # set v to 0 where s_ is terminal state
-        print("#great games ", len(self.great_queue[0]))
         print("a sum: ", np.sum(a[0] == 1, axis=0))
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
         print("rnn : ", rnn_state)
