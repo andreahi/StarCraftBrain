@@ -54,15 +54,10 @@ class Brain:
         train_queue = [[], [], [], [], [], [], [], []]
         samples = recv_range(self.r, key="trainingsample", count=500)
         for sample in samples:
+            print(sample)
             self.train_push(train_queue, *sample)
 
-        with self.read_lock:
-            if len(self.train_queue[0]) < 5000:
-                return
-            s, a, r, s_, s_mask, rnn_state, v, a_policy = self.train_queue
-            self.train_queue = [[], [], [], [], [], [], [], []]
-        #self.train_queue = copy.deepcopy(self.great_queue)
-
+        s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
 
         print("prepping training data")
         s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
