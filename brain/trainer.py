@@ -94,14 +94,14 @@ class Brain:
                 self.first_run = False
                 for _ in range(10):
                     idx = np.random.randint(len(a), size=1000)
-                    v_loss = self.network.train_value(a[idx], r[idx], r[idx], np.ones(shape=(len(v), 1)), s[idx], rnn_state[idx], class_weights)
+                    v_loss = self.network.train_value(a[idx, :], r[idx,:], r[idx,:], np.ones(shape=(len(v), 1)), s[idx,:], rnn_state[idx,:], class_weights)
                     print("loss_value ", np.mean(v_loss))
 
 
             for _ in range(100):
                 idx = np.random.randint(len(a), size=1000)
 
-                v_loss2 = self.network.train_value(a[idx], r[idx], r[idx], np.ones(shape=(len(v), 1)), s[idx], rnn_state[idx], class_weights)
+                v_loss2 = self.network.train_value(a[idx,:], r[idx,:], r[idx,:], np.ones(shape=(len(v), 1)), s[idx,:], rnn_state[idx,:], class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
 
             for _ in range(1):
@@ -110,7 +110,7 @@ class Brain:
                 for _ in range(0):
                     a_loss, x_loss, y_loss, v_loss2 = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 idx = np.random.randint(len(a), size=1000)
-                a_loss, x_loss, y_loss = self.network.train(a[idx], r[idx], v[idx], np.zeros(shape=(len(v), 1)), s[idx], rnn_state, class_weights, a_policy)
+                a_loss, x_loss, y_loss = self.network.train(a[idx,:], r[idx,:], v[idx,:], np.zeros(shape=(len(v), 1)), s[idx,:], rnn_state, class_weights, a_policy)
                 print("a_loss_policy ", np.mean(a_loss))
                 print("x_loss_policy ", np.mean(x_loss))
                 print("y_loss_policy ", np.mean(y_loss))
