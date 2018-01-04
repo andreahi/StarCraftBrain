@@ -6,12 +6,12 @@ import traceback
 import redis
 from keras.models import *
 
-from brain.Actions import get_screen_acions, get_action_map
-from brain.Features import get_screen_unit_type, get_available_actions, get_player_data
-from brain.Network import Network
-from brain.RandomUtils import weighted_random_index
-from brain.SC2ENV import SC2Game
-from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle
+from Actions import get_screen_acions, get_action_map
+from Features import get_screen_unit_type, get_available_actions, get_player_data
+from Network import Network
+from RandomUtils import weighted_random_index
+from SC2ENV import SC2Game
+from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -132,6 +132,16 @@ class Agent:
         a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state, a_policy =\
             brain.predict(available_actions, [[s[0]], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
+
+        a = a[0]
+        x_select_point = x_select_point[0]
+        y_select_point = y_select_point[0]
+        x_spawningPool = x_spawningPool[0]
+        y_spawningPool = y_spawningPool[0]
+        x_spineCrawler = x_spineCrawler[0]
+        y_spineCrawler = y_spineCrawler[0]
+        x_Gather = x_Gather[0]
+        y_Gather = y_Gather[0]
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
@@ -191,7 +201,7 @@ class Agent:
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
         if s_ is None:
-	    
+            game_data = []
             _, _, end_r, _, rnn_sate, a_policy = self.get_sample(self.memory, len(self.memory))
             if r > 20:
                 print("I did geat! ", r)
@@ -207,17 +217,19 @@ class Agent:
                         print(a)
                         brain.train_push(s, a, r*0.99, s_, rnn_sate)
                     else:
-                        if a[1][0] == 1 or a[0][0] == 1:
-                            send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
+                        #if a[1][0] == 1 or a[0][0] == 1:
+                        #    send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
-                        send_zipped_pickle(self.r, [s, a, r, v, s_, rnn_sate, a_policy], key="trainingsample")
+                        data = [s, a, r, v, s_, rnn_sate, a_policy]
+                        #send_zipped_pickle(self.r, data, key="trainingsample")
+                        game_data.append(data)
                         #brain.train_push(s, a, r, v, s_, rnn_sate)
 
                 time.sleep(0)
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
-
+                send_s(self.r, game_data, key="gamesample")
             self.R = 0
 
         if len(self.memory) >= N_STEP_RETURN:

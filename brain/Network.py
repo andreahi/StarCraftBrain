@@ -30,7 +30,7 @@ class Network:
         self._build_graph()
         self.saver = tf.train.Saver(max_to_keep=5)
         self.session.run(tf.global_variables_initializer())
-        self.restore()
+        #self.restore()
 
         self.default_graph = tf.get_default_graph()
 
@@ -432,15 +432,15 @@ class Network:
                                      self.state_in[0]: batch_rnn_state[0],
                                      self.state_in[1]: batch_rnn_state[1]})
 
-            a = self.normalized_multinomial(available_actions, policy[0], 1)
-            x_select_point = self.normalized_multinomial(1, policy_x_select_point[0], 10)
-            y_select_point = self.normalized_multinomial(1, policy_y_select_point[0], 10)
-            x_spawningPool = self.normalized_multinomial(1, policy_x_spawningPool[0], 10)
-            y_spawningPool = self.normalized_multinomial(1, policy_y_spawningPool[0], 10)
-            x_spineCrawler = self.normalized_multinomial(1, policy_x_spineCrawler[0], 10)
-            y_spineCrawler = self.normalized_multinomial(1, policy_y_spineCrawler[0], 10)
-            x_Gather = self.normalized_multinomial(1, policy_x_Gather[0], 100)
-            y_Gather = self.normalized_multinomial(1, policy_y_Gather[0], 100)
+            a = [self.normalized_multinomial(available_actions, p, 1) for p in policy]
+            x_select_point = [self.normalized_multinomial(1, p, 10) for p in policy_x_select_point]
+            y_select_point = [self.normalized_multinomial(1, p, 10) for p in policy_y_select_point]
+            x_spawningPool = [self.normalized_multinomial(1, p, 10) for p in policy_x_spawningPool]
+            y_spawningPool = [self.normalized_multinomial(1, p, 10) for p in policy_y_spawningPool]
+            x_spineCrawler = [self.normalized_multinomial(1, p, 10) for p in policy_x_spineCrawler]
+            y_spineCrawler = [self.normalized_multinomial(1, p, 10) for p in policy_y_spineCrawler]
+            x_Gather = [self.normalized_multinomial(1, p, 10) for p in policy_x_Gather]
+            y_Gather = [self.normalized_multinomial(1, p, 10) for p in policy_y_Gather]
 
             if random.random() > 0.99:
                 print("value: ", v)

@@ -1,18 +1,13 @@
-import random
 import threading
 import time
-import traceback
 
 import redis
-from keras.models import *
+import numpy as np
+from Actions import get_action_map
+from Network import Network
+from redis_int.RedisUtil import recv_s
 
-from brain.Actions import get_screen_acions, get_action_map
-from brain.Features import get_screen_unit_type, get_available_actions, get_player_data
-from brain.Network import Network
-from brain.RandomUtils import weighted_random_index
-from brain.SC2ENV import SC2Game
-from redis_int.RedisUtil import recv_zipped_pickle, send_zipped_pickle, recv_range
-
+import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
@@ -54,7 +49,10 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_range(self.r, key="trainingsample", count=100000)
+        samples = recv_s(self.r, key="gamesample", count=20)
+        p1 = self.network.predict([1] * 11, [[samples[0][0][0][0]], [samples[0][0][0][1]], [samples[0][0][0][2]]],
+                                       [[samples[0][0][5][0]], [samples[0][0][5][1]]])
+
         for sample in samples:
             self.train_push(train_queue, *sample)
 
