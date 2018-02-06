@@ -1,5 +1,6 @@
 import threading
 import time
+import traceback
 
 import redis
 import numpy as np
@@ -8,10 +9,10 @@ from Network import Network
 from redis_int.RedisUtil import recv_s
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
-OPTIMIZERS = 3
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -20,7 +21,6 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .01
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
@@ -43,25 +43,37 @@ class Brain:
         self.first_run = True
         self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
         self.lastTime = time.clock()
-
+        np.set_printoptions(threshold=12)
 
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_s(self.r, key="gamesample", count=20)
-        p1 = self.network.predict([1] * 11, [[samples[0][0][0][0]], [samples[0][0][0][1]], [samples[0][0][0][2]]],
-                                       [[samples[0][0][5][0]], [samples[0][0][5][1]]])
-
+        samples = recv_s(self.r, key="gamesample", count=100)
+        if len(samples) < 100:
+            time.sleep(1)
+            return
+        RNN_USED = False
         for sample in samples:
-            self.train_push(train_queue, *sample)
-
+            prev_rnn1 = [np.zeros((300), np.float32)]
+            prev_rnn2 = [np.zeros((300), np.float32)]
+            for e in sample:
+                if RNN_USED:
+                    out = self.network.predict([1] * 11, [[e[0][0]], [e[0][1]], [e[0][2]]],
+                                     [prev_rnn1, prev_rnn2])
+                e[5][0] = np.copy(prev_rnn1[0])
+                e[5][1] = np.copy(prev_rnn2[0])
+                self.train_push(train_queue, *e)
+                if RNN_USED:
+                    prev_rnn1 = [out[10][0][0]]
+                    prev_rnn2 = [out[10][1][0]]
         s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
 
         print("prepping training data")
-        s = np.array([self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)])
+        s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
         # s = np.stack(s, axis=1)
-        a = np.array([self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)])
+        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4),
+             self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
         r = np.vstack(r)
         v = np.vstack(v)
         a_policy = np.vstack(a_policy)
@@ -77,7 +89,7 @@ class Brain:
 
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
         class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-        class_weights = np.clip(class_weights, 1, 100)
+        class_weights = np.clip(class_weights, 1, 10)
         # _, _, _, v, _ = self.predict(s_, rnn_state)
         # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
         r = r  # set v to 0 where s_ is terminal state
@@ -90,35 +102,45 @@ class Brain:
             if self.first_run:
                 print("first run")
                 self.first_run = False
-                for _ in range(10):
-                    idx = np.random.randint(len(a), size=1000)
-                    v_loss = self.network.train_value(a[idx], r[idx], r[idx], np.ones(shape=(len(v), 1)), s[idx], rnn_state[idx], class_weights)
+                for _ in range(0):
+                    #idx = np.random.randint(len(a), size=1000)
+                    #out = self.network.predict([1] * 11, s, rnn_state)
+                    v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                     print("loss_value ", np.mean(v_loss))
 
+            for _ in range(0):
+                v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
 
-            for _ in range(100):
-                idx = np.random.randint(len(a), size=1000)
-
-                v_loss2 = self.network.train_value(a[idx], r[idx], r[idx], np.ones(shape=(len(v), 1)), s[idx], rnn_state[idx], class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
-
             for _ in range(1):
                 #time.sleep(0.1)
                 #v_loss = 0.0
                 for _ in range(0):
                     a_loss, x_loss, y_loss, v_loss2 = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-                idx = np.random.randint(len(a), size=1000)
-                a_loss, x_loss, y_loss = self.network.train(a[idx], r[idx], v[idx], np.zeros(shape=(len(v), 1)), s[idx], rnn_state, class_weights, a_policy)
+                total_loss, v_loss, a_loss, x_loss, y_loss, y_loss_spawn, y_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
+                print("total_loss ", total_loss)
+                print("total_loss mean ", np.mean(total_loss))
+                print("v_loss ", np.mean(v_loss))
                 print("a_loss_policy ", np.mean(a_loss))
                 print("x_loss_policy ", np.mean(x_loss))
                 print("y_loss_policy ", np.mean(y_loss))
+                print("y_loss_spawn ", np.mean(y_loss_spawn))
+                print("y_loss_spine ", np.mean(y_loss_spine))
+
+
 
             for _ in range(0):
                 v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
             if((time.clock() - self.lastTime) > 60):
                 print("saving model")
-                brain.save()
+                while 1:
+                    try:
+                        brain.save()
+                        break
+                    except Exception as exp:
+                        print(exp)
+                        time.sleep(1)
                 self.lastTime = time.clock()
 
             # print "optimized done"
@@ -134,20 +156,20 @@ class Brain:
 
     def train_push(self, train_queue, s, a, r, v, s_, rnn_state, a_policy):
         with self.lock_queue:
-            train_queue[0].append(s)
-            train_queue[1].append(a)
-            train_queue[2].append(r)
+            train_queue[0].append(np.copy(s))
+            train_queue[1].append(np.copy(a))
+            train_queue[2].append(np.copy(r))
 
             if s_ is None:
-                train_queue[3].append(s)
+                train_queue[3].append(np.copy(s))
                 train_queue[4].append(0.)
             else:
-                train_queue[3].append(s_)
+                train_queue[3].append(np.copy(s_))
                 train_queue[4].append(1.)
 
-            train_queue[5].append(rnn_state)
-            train_queue[6].append(v)
-            train_queue[7].append(a_policy)
+            train_queue[5].append(np.copy(rnn_state))
+            train_queue[6].append(np.copy(v))
+            train_queue[7].append(np.copy(a_policy))
 
     def push_great_game(self, s, a, r, v, s_, rnn_state):
         with self.lock_queue:
@@ -184,8 +206,13 @@ class Optimizer(threading.Thread):
 
     def run(self):
         while not self.stop_signal:
-            brain.optimize()
-            
+            try:
+                brain.optimize()
+            except Exception as exp:
+                tb = traceback.format_exc()
+                print("got exception while training")
+                print(tb)
+                print(exp)
             
 
     def stop(self):

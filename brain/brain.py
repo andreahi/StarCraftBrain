@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 RUN_TIME = 300000
 THREADS = 50
@@ -26,8 +26,8 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .1
-EPS_STEPS = 750
+EPS_STOP = .01
+EPS_STEPS = 75
 
 MIN_BATCH = 10000
 
@@ -114,8 +114,8 @@ class Agent:
         self.rnn_state = self.get_lstm_init_state()
 
     def get_lstm_init_state(self):
-        c_init = np.zeros((100), np.float32)
-        h_init = np.zeros((100), np.float32)
+        c_init = np.zeros((300), np.float32)
+        h_init = np.zeros((300), np.float32)
         return [c_init, h_init]
 
     def getEpsilon(self):
@@ -221,6 +221,8 @@ class Agent:
                         #    send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
                         data = [s, a, r, v, s_, rnn_sate, a_policy]
+                        #if a[0][0] == 1:
+                        #    data = [s, a, r*0.9, v, s_, rnn_sate, a_policy]
                         #send_zipped_pickle(self.r, data, key="trainingsample")
                         game_data.append(data)
                         #brain.train_push(s, a, r, v, s_, rnn_sate)
@@ -229,7 +231,7 @@ class Agent:
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
-                send_s(self.r, game_data, key="gamesample")
+            send_s(self.r, game_data, key="gamesample")
             self.R = 0
 
         if len(self.memory) >= N_STEP_RETURN:
@@ -258,7 +260,7 @@ class Environment(threading.Thread):
 
     def runEpisode(self):
         # s = self.env.reset()
-        print("epsilon ", self.agent.getEpsilon())
+        #print("epsilon ", self.agent.getEpsilon())
 
         global counter_lock
         with counter_lock:
@@ -342,7 +344,7 @@ class Environment(threading.Thread):
 
             if done:  # terminal state
                 s_ = None
-                print("done and none")
+                #print("done and none")
                 # s_ = self.get_state(obs)
             else:
                 s_ = self.get_state(obs)
@@ -366,7 +368,7 @@ class Environment(threading.Thread):
                 self.agent.reset()
                 self.runEpisode()
                 if os.path.isfile("models/checkpoint"):
-                    print("loading model")
+                    #print("loading model")
                     brain.restore()
 
             except Exception as exp:
