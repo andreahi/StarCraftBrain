@@ -21,7 +21,9 @@ class SC2Game:
 
         return False, data[1], data[2]
 
-    def make_action(self, action, x, y):
+    def make_action(self, action, xy):
+        x = xy/84
+        y = xy%84
         args = []
 
         if action in get_screen_acions():
