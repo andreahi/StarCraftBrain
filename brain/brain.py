@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
 THREADS = 50
@@ -26,7 +26,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .01
+EPS_STOP = .1
 EPS_STEPS = 75
 
 MIN_BATCH = 10000

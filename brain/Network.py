@@ -181,6 +181,24 @@ class Network:
         self.action_weight = tf.placeholder(tf.float32, 1)
         self.value_weight = tf.placeholder(tf.float32, 1)
 
+        self.first_v_loss = tf.placeholder(tf.float32, 1)
+        self.first_a_loss = tf.placeholder(tf.float32, 1)
+        self.first_x_select_loss = tf.placeholder(tf.float32, 1)
+        self.first_y_select_loss = tf.placeholder(tf.float32, 1)
+        self.first_x_spawn_loss = tf.placeholder(tf.float32, 1)
+        self.first_y_spawn_loss = tf.placeholder(tf.float32, 1)
+        self.first_x_spine_loss = tf.placeholder(tf.float32, 1)
+        self.first_y_spine_loss = tf.placeholder(tf.float32, 1)
+
+        self.first_v_loss = tf.Print(self.first_v_loss, [self.first_v_loss, tf.shape(self.first_v_loss)], "self.first_v_loss: ")
+        self.first_a_loss = tf.Print(self.first_a_loss, [self.first_a_loss, tf.shape(self.first_a_loss)], "self.first_a_loss: ")
+        self.first_x_select_loss = tf.Print(self.first_x_select_loss, [self.first_x_select_loss, tf.shape(self.first_x_select_loss)], "self.first_x_select_loss")
+        self.first_y_select_loss = tf.Print(self.first_y_select_loss, [self.first_y_select_loss, tf.shape(self.first_y_select_loss)], "self.first_y_select_loss: ")
+        self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
+        self.first_y_spawn_loss = tf.Print(self.first_y_spawn_loss, [self.first_y_spawn_loss, tf.shape(self.first_y_spawn_loss)], "self.first_y_spawn_loss: ")
+        self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
+        self.first_y_spine_loss = tf.Print(self.first_y_spine_loss, [self.first_y_spine_loss, tf.shape(self.first_y_spine_loss)], "self.first_y_spine_loss: ")
+
         advantage = (self.value - self.r_t) * 10
         advantage = tf.squeeze(advantage)
         advantage = tf.square(advantage) * tf.sign(advantage)
@@ -197,14 +215,14 @@ class Network:
         self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point) * 1000
         self.y_loss_select_point = self.get_loss_one(advantage, self.policy_y_select_point, self.y_t_select_point) * 1000
 
-        self.x_loss_spawningPool = self.get_loss_one(advantage, self.policy_x_spawningPool, self.x_t_spawningPool) * 1000
-        self.y_loss_spawningPool = self.get_loss_one(advantage, self.policy_y_spawningPool, self.y_t_spawningPool) * 1000
+        self.x_loss_spawningPool = self.get_loss_one(advantage, self.policy_x_spawningPool, self.x_t_spawningPool) * 10000
+        self.y_loss_spawningPool = self.get_loss_one(advantage, self.policy_y_spawningPool, self.y_t_spawningPool) * 10000
 
-        self.x_loss_spineCrawler = self.get_loss_one(advantage, self.policy_x_spineCrawler, self.x_t_spineCrawler) * 1000
-        self.y_loss_spineCrawler = self.get_loss_one(advantage, self.policy_y_spineCrawler, self.y_t_spineCrawler) * 1000
+        self.x_loss_spineCrawler = self.get_loss_one(advantage, self.policy_x_spineCrawler, self.x_t_spineCrawler) * 100000
+        self.y_loss_spineCrawler = self.get_loss_one(advantage, self.policy_y_spineCrawler, self.y_t_spineCrawler) * 100000
 
-        self.x_loss_Gather = self.get_loss_one(advantage, self.policy_x_Gather, self.x_t_Gather) * 1000
-        self.y_loss_Gather = self.get_loss_one(advantage, self.policy_y_Gather, self.y_t_Gather) * 1000
+        self.x_loss_Gather = self.get_loss_one(advantage, self.policy_x_Gather, self.x_t_Gather) * 10
+        self.y_loss_Gather = self.get_loss_one(advantage, self.policy_y_Gather, self.y_t_Gather) * 10
 
         # self.x_loss = tf.Print(self.x_loss, [self.x_loss, tf.shape(self.x_loss)], "self.x_loss: ")
 
@@ -254,7 +272,7 @@ class Network:
         self.v_loss = loss_value * 10
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-4)
+        optimizer = tf.train.AdamOptimizer(1e-5)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         #gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
@@ -278,10 +296,10 @@ class Network:
         self.x_loss_Gather = tf.Print(self.x_loss_Gather, [self.x_loss_Gather, tf.shape(self.x_loss_Gather)], "self.x_loss_Gather")
         self.y_loss_Gather = tf.Print(self.y_loss_Gather, [self.y_loss_Gather, tf.shape(self.y_loss_Gather)], "self.y_loss_Gather")
 
-        self.total_loss = self.v_loss + self.a_loss_policy +\
-                          self.x_loss_select_point + self.y_loss_select_point +\
-                          self.x_loss_spawningPool + self.y_loss_spawningPool +\
-                          self.x_loss_spineCrawler + self.y_loss_spineCrawler +\
+        self.total_loss = self.v_loss/tf.stop_gradient(self.first_v_loss) + self.a_loss_policy/tf.stop_gradient(self.first_a_loss) +\
+                          self.x_loss_select_point/tf.stop_gradient(self.first_x_select_loss) + self.y_loss_select_point/tf.stop_gradient(self.first_y_select_loss) +\
+                          self.x_loss_spawningPool/tf.stop_gradient(self.first_x_spawn_loss) + self.y_loss_spawningPool/tf.stop_gradient(self.first_y_spawn_loss) +\
+                          self.x_loss_spineCrawler/tf.stop_gradient(self.first_x_spine_loss) + self.y_loss_spineCrawler/tf.stop_gradient(self.first_y_spine_loss) +\
                           self.x_loss_Gather + self.y_loss_Gather
         self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss)
                                            )
@@ -366,7 +384,7 @@ class Network:
         value = tf.squeeze(tf.multinomial(self.weights, 1), [1])
         return tf.one_hot(value, d)
 
-    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy):
+    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy, losses):
 
         _, v_loss, total_loss, a_loss, x_loss, y_loss, y_loss_spawning, y_loss_spine, reduced_adv = self.session.run(
             [self.minimize, self.v_loss, self.total_loss, self.a_loss_policy, self.x_loss_select_point, self.y_loss_select_point, self.y_loss_spawningPool, self.y_loss_spineCrawler, self.reduced_adv],
@@ -391,9 +409,51 @@ class Network:
                        self.class_weight: class_weights,
                        self.action_weight: [1],
                        self.value_weight: [.00000],
-                       self.a_policy_target: a_policy
+                       self.a_policy_target: a_policy,
+                       self.first_v_loss:np.array([np.mean(losses[0]) + 0.1]),
+                       self.first_a_loss:np.array([np.mean(losses[1]) + 0.1]),
+                       self.first_x_select_loss:np.array([np.mean(losses[2]) + 0.1]),
+                       self.first_y_select_loss:np.array([np.mean(losses[3]) + 0.1]),
+                       self.first_x_spawn_loss:np.array([np.mean(losses[4]) + 0.1]),
+                       self.first_y_spawn_loss:np.array([np.mean(losses[5]) + 0.1]),
+                       self.first_x_spine_loss:np.array([np.mean(losses[6]) + 0.1]),
+                       self.first_y_spine_loss:np.array([np.mean(losses[7]) + 0.1]),
                        })
         return total_loss, v_loss, a_loss, x_loss, y_loss, y_loss_spawning, y_loss_spine
+
+    def get_losses(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy):
+
+        losses = self.session.run(
+            [
+             self.v_loss, self.a_loss_policy,
+             self.x_loss_select_point, self.y_loss_select_point,
+             self.x_loss_spawningPool, self.y_loss_spawningPool,
+             self.x_loss_spineCrawler, self.y_loss_spineCrawler,
+             ],
+            feed_dict={
+                       self.inputs_unit_type: s[0],
+                       self.inputs_workers: s[2],
+                       self.input_player: s[1],
+                       self.a_t: a[0],
+                       self.x_t_select_point: a[1],
+                       self.y_t_select_point: a[2],
+                       self.x_t_spawningPool: a[3],
+                       self.y_t_spawningPool: a[4],
+                       self.x_t_spineCrawler: a[5],
+                       self.y_t_spineCrawler: a[6],
+                       self.x_t_Gather: a[7],
+                       self.y_t_Gather: a[8],
+                       self.r_t: r,
+                       self.v_t:v,
+                       self.v_toggle: v_toggle,
+                       self.state_in[0]: rnn_state[0],
+                       self.state_in[1]: rnn_state[1],
+                       self.class_weight: class_weights,
+                       self.action_weight: [1],
+                       self.value_weight: [.00000],
+                       self.a_policy_target: a_policy
+                       })
+        return losses
 
     def train_value(self, a, r, v, v_toggle, s, rnn_state, class_weights):
 
@@ -467,15 +527,15 @@ class Network:
                 policy[i][9] = np.mean([max(policy_x_spineCrawler[i]), max(policy_y_spineCrawler[i])])
                 policy[i][10] = np.mean([max(policy_x_Gather[i]), max(policy_y_Gather[i])])
 
-            a = [self.normalized_multinomial(available_actions, p, 1) for p in np.copy(policy)]
-            x_select_point = [self.normalized_multinomial(1, p, 100) for p in np.copy(policy_x_select_point)]
-            y_select_point = [self.normalized_multinomial(1, p, 100) for p in policy_y_select_point]
-            x_spawningPool = [self.normalized_multinomial(1, p, 100) for p in policy_x_spawningPool]
-            y_spawningPool = [self.normalized_multinomial(1, p, 100) for p in policy_y_spawningPool]
-            x_spineCrawler = [self.normalized_multinomial(1, p, 100) for p in policy_x_spineCrawler]
-            y_spineCrawler = [self.normalized_multinomial(1, p, 100) for p in policy_y_spineCrawler]
-            x_Gather = [self.normalized_multinomial(1, p, 100) for p in policy_x_Gather]
-            y_Gather = [self.normalized_multinomial(1, p, 100) for p in policy_y_Gather]
+            a = [self.normalized_multinomial(available_actions, p, 10) for p in np.copy(policy)]
+            x_select_point = [self.normalized_multinomial(1, p, 10000) for p in np.copy(policy_x_select_point)]
+            y_select_point = [self.normalized_multinomial(1, p, 10000) for p in policy_y_select_point]
+            x_spawningPool = [self.normalized_multinomial(1, p, 10000) for p in policy_x_spawningPool]
+            y_spawningPool = [self.normalized_multinomial(1, p, 10000) for p in policy_y_spawningPool]
+            x_spineCrawler = [self.normalized_multinomial(1, p, 10000) for p in policy_x_spineCrawler]
+            y_spineCrawler = [self.normalized_multinomial(1, p, 10000) for p in policy_y_spineCrawler]
+            x_Gather = [self.normalized_multinomial(1, p, 10000) for p in policy_x_Gather]
+            y_Gather = [self.normalized_multinomial(1, p, 10000) for p in policy_y_Gather]
 
 
             return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, state_out, policy[0]

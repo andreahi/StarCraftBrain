@@ -9,7 +9,7 @@ from Network import Network
 from redis_int.RedisUtil import recv_s
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
 OPTIMIZERS = 1
@@ -49,8 +49,8 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_s(self.r, key="gamesample", count=100)
-        if len(samples) < 100:
+        samples = recv_s(self.r, key="gamesample", count=50)
+        if len(samples) < 50:
             time.sleep(1)
             return
         RNN_USED = False
@@ -108,16 +108,13 @@ class Brain:
                     v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                     print("loss_value ", np.mean(v_loss))
 
-            for _ in range(0):
-                v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
 
-                print("loss_value2 ", np.mean(v_loss2))
-            for _ in range(1):
-                #time.sleep(0.1)
-                #v_loss = 0.0
-                for _ in range(0):
-                    a_loss, x_loss, y_loss, v_loss2 = self.network.train(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-                total_loss, v_loss, a_loss, x_loss, y_loss, y_loss_spawn, y_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
+            losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
+            print("first losses", losses)
+
+            for _ in range(50):
+
+                total_loss, v_loss, a_loss, x_loss, y_loss, y_loss_spawn, y_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
                 print("total_loss ", total_loss)
                 print("total_loss mean ", np.mean(total_loss))
                 print("v_loss ", np.mean(v_loss))
