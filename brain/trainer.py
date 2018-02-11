@@ -49,8 +49,8 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_s(self.r, key="gamesample", count=50)
-        if len(samples) < 50:
+        samples = recv_s(self.r, key="gamesample", count=100)
+        if len(samples) < 100:
             time.sleep(1)
             return
         RNN_USED = False
@@ -72,8 +72,8 @@ class Brain:
         print("prepping training data")
         s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
         # s = np.stack(s, axis=1)
-        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2), self.to_array(a, 3), self.to_array(a, 4),
-             self.to_array(a, 5), self.to_array(a, 6), self.to_array(a, 7), self.to_array(a, 8)]
+        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
+             self.to_array(a, 3), self.to_array(a, 4)]
         r = np.vstack(r)
         v = np.vstack(v)
         a_policy = np.vstack(a_policy)
@@ -102,34 +102,27 @@ class Brain:
             if self.first_run:
                 print("first run")
                 self.first_run = False
-                for _ in range(0):
-                    #idx = np.random.randint(len(a), size=1000)
-                    #out = self.network.predict([1] * 11, s, rnn_state)
-                    v_loss = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-                    print("loss_value ", np.mean(v_loss))
-
 
             losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
             print("first losses", losses)
 
             for _ in range(50):
 
-                total_loss, v_loss, a_loss, x_loss, y_loss, y_loss_spawn, y_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
+                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
                 print("total_loss ", total_loss)
                 print("total_loss mean ", np.mean(total_loss))
                 print("v_loss ", np.mean(v_loss))
                 print("a_loss_policy ", np.mean(a_loss))
                 print("x_loss_policy ", np.mean(x_loss))
-                print("y_loss_policy ", np.mean(y_loss))
-                print("y_loss_spawn ", np.mean(y_loss_spawn))
-                print("y_loss_spine ", np.mean(y_loss_spine))
+                print("x_loss_spawn ", np.mean(x_loss_spawn))
+                print("x_loss_spine ", np.mean(x_loss_spine))
 
 
 
             for _ in range(0):
                 v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
                 print("loss_value2 ", np.mean(v_loss2))
-            if((time.clock() - self.lastTime) > 60):
+            if((time.clock() - self.lastTime) > 30):
                 print("saving model")
                 while 1:
                     try:

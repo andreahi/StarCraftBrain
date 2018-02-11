@@ -21,8 +21,8 @@ def recv_s(socket, key="trainingsample", count=1):
     #    time.sleep(0.1)
     data_l = socket.srandmember(key, number=count)
 
-    if len(data_l) >= 50:
-        for _ in range(50):
+    if len(data_l) >= 100:
+        for _ in range(100):
             socket.spop(key)
     return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
 

@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 RUN_TIME = 300000
 THREADS = 50
@@ -129,35 +129,27 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, rnn_state, a_policy =\
+        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, rnn_state, a_policy =\
             brain.predict(available_actions, [[s[0]], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
 
         a = a[0]
         x_select_point = x_select_point[0]
-        y_select_point = y_select_point[0]
         x_spawningPool = x_spawningPool[0]
-        y_spawningPool = y_spawningPool[0]
         x_spineCrawler = x_spineCrawler[0]
-        y_spineCrawler = y_spineCrawler[0]
         x_Gather = x_Gather[0]
-        y_Gather = y_Gather[0]
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
-                x_select_point = np.random.randint(0, 84)
-                y_select_point = np.random.randint(0, 84)
-                x_spawningPool = np.random.randint(0, 84)
-                y_spawningPool = np.random.randint(0, 84)
-                x_spineCrawler = np.random.randint(0, 84)
-                y_spineCrawler = np.random.randint(0, 84)
-                x_Gather = np.random.randint(0, 84)
-                y_Gather = np.random.randint(0, 84)
+                x_select_point = np.random.randint(0, 7056)
+                x_spawningPool = np.random.randint(0, 7056)
+                x_spineCrawler = np.random.randint(0, 7056)
+                x_Gather = np.random.randint(0, 7056)
 
-        return a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather,  v, _rnn_state, a_policy
+        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather,  v, _rnn_state, a_policy
 
     def get_sample(self, memory, n):
         s, a, _, _, rnn_sate, a_policy = memory[0]
@@ -168,35 +160,23 @@ class Agent:
     def train(self, s, a, r, v, s_, rnn_sate, a_policy):
 
         a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
-        x_select_cats = np.zeros(84)  # turn action into one-hot representation
-        y_select_cats = np.zeros(84)  # turn action into one-hot representation
-        x_spawningPool = np.zeros(84)  # turn action into one-hot representation
-        y_spawningPool = np.zeros(84)  # turn action into one-hot representation
-        x_spineCrawler = np.zeros(84)  # turn action into one-hot representation
-        y_spineCrawler = np.zeros(84)  # turn action into one-hot representation
-        x_Gather = np.zeros(84)  # turn action into one-hot representation
-        y_Gather = np.zeros(84)  # turn action into one-hot representation
+        x_select_cats = np.zeros(7056)  # turn action into one-hot representation
+        x_spawningPool = np.zeros(7056)  # turn action into one-hot representation
+        x_spineCrawler = np.zeros(7056)  # turn action into one-hot representation
+        x_Gather = np.zeros(7056)  # turn action into one-hot representation
         if a[0] != -1:
             #a_cats = (np.ones(NUM_ACTIONS) * -1) /(NUM_ACTIONS - 1)
             a_cats[a[0]] = 1
         if a[1] != -1:
             x_select_cats[a[1]] = 1
         if a[2] != -1:
-            y_select_cats[a[2]] = 1
+            x_spawningPool[a[2]] = 1
         if a[3] != -1:
-            x_spawningPool[a[3]] = 1
+            x_spineCrawler[a[3]] = 1
         if a[4] != -1:
-            y_spawningPool[a[4]] = 1
-        if a[5] != -1:
-            x_spineCrawler[a[5]] = 1
-        if a[6] != -1:
-            y_spineCrawler[a[6]] = 1
-        if a[7] != -1:
-            x_Gather[a[7]] = 1
-        if a[8] != -1:
-            y_Gather[a[8]] = 1
+            x_Gather[a[4]] = 1
 
-        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, y_select_cats, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather]), np.copy(r), s_, rnn_sate, a_policy))
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather]), np.copy(r), s_, rnn_sate, a_policy))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
@@ -283,7 +263,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
+            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -294,51 +274,35 @@ class Environment(threading.Thread):
                 _a = 0
 
             if a == 2:
-                _ = self.env.make_action(_a, x_select_point, y_select_point)
+                _ = self.env.make_action(_a, x_select_point)
                 x_spawningPool = -1
-                y_spawningPool = -1
                 x_spineCrawler = -1
-                y_spineCrawler = -1
                 x_Gather = -1
-                y_Gather = -1
 
             elif a == 6:
-                _ = self.env.make_action(_a, x_spawningPool, y_spawningPool)
+                _ = self.env.make_action(_a, x_spawningPool)
                 x_select_point = -1
-                y_select_point = -1
                 x_spineCrawler = -1
-                y_spineCrawler = -1
                 x_Gather = -1
-                y_Gather = -1
 
             elif a == 9:
-                _ = self.env.make_action(_a, x_spineCrawler, y_spineCrawler)
+                _ = self.env.make_action(_a, x_spineCrawler)
                 x_select_point = -1
-                y_select_point = -1
                 x_spawningPool = -1
-                y_spawningPool = -1
                 x_Gather = -1
-                y_Gather = -1
 
             elif a == 10:
-                _ = self.env.make_action(_a, x_Gather, y_Gather)
+                _ = self.env.make_action(_a, x_Gather)
                 x_select_point = -1
-                y_select_point = -1
                 x_spawningPool = -1
-                y_spawningPool = -1
                 x_spineCrawler = -1
-                y_spineCrawler = -1
 
             else:
-                _ = self.env.make_action(_a, -1, -1)
+                _ = self.env.make_action(_a, -1)
                 x_select_point = -1
-                y_select_point = -1
                 x_spawningPool = -1
-                y_spawningPool = -1
                 x_spineCrawler = -1
-                y_spineCrawler = -1
                 x_Gather = -1
-                y_Gather = -1
 
             done, obs, r = self.env.get_state()
 
@@ -349,7 +313,7 @@ class Environment(threading.Thread):
             else:
                 s_ = self.get_state(obs)
             with self.lock_queue:
-                   self.agent.train(s, [a, x_select_point, y_select_point, x_spawningPool, y_spawningPool, x_spineCrawler, y_spineCrawler, x_Gather, y_Gather], r, v, s_, rnn_state, a_policy)
+                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_
