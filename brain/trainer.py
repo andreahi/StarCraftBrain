@@ -49,8 +49,8 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_s(self.r, key="gamesample", count=10)
-        if len(samples) < 10:
+        samples = recv_s(self.r, key="gamesample", count=100)
+        if len(samples) < 100:
             time.sleep(1)
             return
         RNN_USED = False
