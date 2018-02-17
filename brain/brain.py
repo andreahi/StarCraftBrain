@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
 THREADS = 50
@@ -332,7 +332,7 @@ class Environment(threading.Thread):
                 self.agent.reset()
                 self.runEpisode()
                 if os.path.isfile("models/checkpoint"):
-                    #print("loading model")
+                    print("loading model")
                     brain.restore()
 
             except Exception as exp:

@@ -168,7 +168,7 @@ class Network:
         self.value_weight = tf.placeholder(tf.float32, 1)
 
         self.first_v_loss = tf.placeholder(tf.float32, 1)
-        self.first_a_loss = tf.placeholder(tf.float32, 1)
+        self.first_a_loss = tf.placeholder(tf.float32, 11)
         self.first_x_select_loss = tf.placeholder(tf.float32, 1)
         self.first_x_spawn_loss = tf.placeholder(tf.float32, 1)
         self.first_x_spine_loss = tf.placeholder(tf.float32, 1)
@@ -179,7 +179,7 @@ class Network:
         self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
         self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
 
-        advantage = (self.value - self.r_t) * 10
+        advantage = (self.value - self.r_t) * 100
         advantage = tf.squeeze(advantage)
         advantage = tf.square(advantage) * tf.sign(advantage)
         advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
@@ -208,10 +208,10 @@ class Network:
             self.policy - tf.stop_gradient(10 *  self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
         target_error = tf.Print(target_error, [target_error, tf.shape(target_error)], "target_error: ")
 
-        target_loss = tf.reduce_mean(target_error * self.a_t, axis=1)
+        target_loss = tf.reduce_mean(target_error * self.a_t * tf.stop_gradient(tf.transpose(tf.abs([advantage]))), axis=0)
         target_loss = tf.Print(target_loss, [target_loss, tf.shape(target_loss)], "target_loss: ")
 
-        self.a_loss_policy = (target_loss * tf.stop_gradient(tf.abs(advantage)))
+        self.a_loss_policy = (target_loss )
 
 
         a_policy_entropy = tf.reduce_mean(tf.reduce_mean(np.square(self.policy))) * 0.0001
@@ -239,7 +239,7 @@ class Network:
         self.v_loss = loss_value * 10
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-5)
+        optimizer = tf.train.AdamOptimizer(1e-6)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         #gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
@@ -256,11 +256,16 @@ class Network:
         self.x_loss_spineCrawler = tf.Print(self.x_loss_spineCrawler, [self.x_loss_spineCrawler, tf.shape(self.x_loss_spineCrawler)], "self.x_loss_spineCrawler")
         self.x_loss_Gather = tf.Print(self.x_loss_Gather, [self.x_loss_Gather, tf.shape(self.x_loss_Gather)], "self.x_loss_Gather")
 
-        self.total_loss = self.v_loss/tf.stop_gradient(self.first_v_loss) + self.a_loss_policy/tf.stop_gradient(self.first_a_loss) +\
-                          self.x_loss_select_point/tf.stop_gradient(self.first_x_select_loss)  +\
-                          self.x_loss_spawningPool/tf.stop_gradient(self.first_x_spawn_loss)  +\
-                          self.x_loss_spineCrawler/tf.stop_gradient(self.first_x_spine_loss)  +\
-                          self.x_loss_Gather
+        a_loss_n = tf.reduce_sum(self.a_loss_policy / tf.stop_gradient(self.first_a_loss))
+        a_loss_n = tf.Print(a_loss_n, [a_loss_n, tf.shape(a_loss_n)], "a_loss_n")
+
+
+        self.total_loss = tf.reduce_mean(self.v_loss) / tf.stop_gradient(self.first_v_loss) +\
+                          a_loss_n + \
+                          tf.reduce_mean(self.x_loss_select_point) / tf.stop_gradient(self.first_x_select_loss) + \
+                          tf.reduce_mean(self.x_loss_spawningPool) / tf.stop_gradient(self.first_x_spawn_loss) + \
+                          tf.reduce_mean(self.x_loss_spineCrawler) / tf.stop_gradient(self.first_x_spine_loss)  #+\
+                          #self.x_loss_Gather
         self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss) #- tf.reduce_mean(tf.reduce_mean(self.policy_x_spineCrawler)/10000)
                                            )
         #gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
@@ -320,7 +325,7 @@ class Network:
 
         loss = tf.reduce_mean(
             tf.square(policy - (10 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
-            * t, axis=1) * tf.stop_gradient(tf.abs(advantage)) / t_count
+            * t, axis=1) * tf.stop_gradient(tf.abs(advantage))
 
         return loss * 10 + value_regulizer
 
@@ -367,10 +372,10 @@ class Network:
                        self.value_weight: [.00000],
                        self.a_policy_target: a_policy,
                        self.first_v_loss:np.array([np.mean(losses[0]) + 0.1]),
-                       self.first_a_loss:np.array([np.mean(losses[1]) + 0.1]),
+                       self.first_a_loss:np.array(losses[1] + 0.1),
                        self.first_x_select_loss:np.array([np.mean(losses[2]) + 0.1]),
                        self.first_x_spawn_loss:np.array([np.mean(losses[3]) + 0.1]),
-                       self.first_x_spine_loss:np.array([np.mean(losses[4]) + 0.1]),
+                       self.first_x_spine_loss:np.array([np.mean(losses[4]) + 0.1])
                        })
         return total_loss, v_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine
 
@@ -445,15 +450,15 @@ class Network:
                 policy[i][2] = max(policy_x_select_point[i])
                 policy[i][6] = max(policy_x_spawningPool[i])
                 policy[i][9] = max(policy_x_spineCrawler[i])
-                policy[i][10] = max(policy_x_Gather[i])
+                policy[i][10] = -10#max(policy_x_Gather[i])
             if r_value > 0.99:
                 print("after policy: ", policy)
 
-            a = [self.normalized_multinomial(available_actions, p, 10) for p in np.copy(policy)]
-            x_select_point = [self.normalized_multinomial(1, p, 10000) for p in np.copy(policy_x_select_point)]
-            x_spawningPool = [self.normalized_multinomial(1, p, 10000) for p in policy_x_spawningPool]
-            x_spineCrawler = [self.normalized_multinomial(1, p, 10000) for p in policy_x_spineCrawler]
-            x_Gather = [self.normalized_multinomial(1, p, 10000) for p in policy_x_Gather]
+            a = [self.normalized_multinomial(available_actions, p, 1000) for p in np.copy(policy)]
+            x_select_point = [self.normalized_multinomial(1, p, 1000000) for p in np.copy(policy_x_select_point)]
+            x_spawningPool = [self.normalized_multinomial(1, p, 1000000) for p in policy_x_spawningPool]
+            x_spineCrawler = [self.normalized_multinomial(1, p, 1000000) for p in policy_x_spineCrawler]
+            x_Gather = [self.normalized_multinomial(1, p, 1000000) for p in policy_x_Gather]
 
 
             return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, state_out, policy[0]

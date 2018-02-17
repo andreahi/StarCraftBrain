@@ -1,3 +1,4 @@
+import random
 import threading
 import time
 import traceback
@@ -12,7 +13,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
-OPTIMIZERS = 1
+OPTIMIZERS = 9
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -37,7 +38,7 @@ class Brain:
     lock_queue = threading.Lock()
     read_lock = threading.Lock()
     gpu_lock = threading.Lock()
-
+    save_lock = threading.Lock()
     def __init__(self):
         self.network = Network()
         self.first_run = True
@@ -49,24 +50,25 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        samples = recv_s(self.r, key="gamesample", count=100)
-        if len(samples) < 100:
-            time.sleep(1)
-            return
-        RNN_USED = False
-        for sample in samples:
-            prev_rnn1 = [np.zeros((300), np.float32)]
-            prev_rnn2 = [np.zeros((300), np.float32)]
-            for e in sample:
-                if RNN_USED:
-                    out = self.network.predict([1] * 11, [[e[0][0]], [e[0][1]], [e[0][2]]],
-                                     [prev_rnn1, prev_rnn2])
-                e[5][0] = np.copy(prev_rnn1[0])
-                e[5][1] = np.copy(prev_rnn2[0])
-                self.train_push(train_queue, *e)
-                if RNN_USED:
-                    prev_rnn1 = [out[10][0][0]]
-                    prev_rnn2 = [out[10][1][0]]
+        for _ in range(20):
+            samples = recv_s(self.r, key="gamesample", count=50)
+            RNN_USED = False
+            for sample in samples:
+                prev_rnn1 = [np.zeros((300), np.float32)]
+                prev_rnn2 = [np.zeros((300), np.float32)]
+                for e in sample:
+                    if random.random() > 0.1:
+                        continue
+                    if RNN_USED:
+                        out = self.network.predict([1] * 11, [[e[0][0]], [e[0][1]], [e[0][2]]],
+                                         [prev_rnn1, prev_rnn2])
+                    e[5][0] = np.copy(prev_rnn1[0])
+                    e[5][1] = np.copy(prev_rnn2[0])
+                    self.train_push(train_queue, *e)
+                    if RNN_USED:
+                        prev_rnn1 = [out[10][0][0]]
+                        prev_rnn2 = [out[10][1][0]]
+
         s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
 
         print("prepping training data")
@@ -79,12 +81,12 @@ class Brain:
         a_policy = np.vstack(a_policy)
         # s_ = np.stack(s_, axis=1)
         s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
-        for i in range(0, len(a)):
-            if r[i] > v[i]:
-                a_policy[i][np.argmax(a[0][i])] = 10
-            else:
-                a_policy[i][np.argmax(a[0][i])] = -10
-        s_mask = np.vstack(s_mask)
+        #for i in range(0, len(a)):
+        #    if r[i] > v[i]:
+        #        a_policy[i][np.argmax(a[0][i])] = 10
+        #    else:
+        #        a_policy[i][np.argmax(a[0][i])] = -10
+        #s_mask = np.vstack(s_mask)
         rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
 
         if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
@@ -97,41 +99,41 @@ class Brain:
         print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
         print("rnn : ", rnn_state)
 
+        if self.first_run:
+            print("first run")
+            self.first_run = False
         with self.gpu_lock:
-
-            if self.first_run:
-                print("first run")
-                self.first_run = False
 
             losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
             print("first losses", losses)
 
-            for _ in range(50):
+        for _ in range(20):
+            with self.gpu_lock:
+                    total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
+                    print("total_loss ", total_loss)
+                    print("total_loss mean ", np.mean(total_loss))
+                    print("v_loss ", np.mean(v_loss))
+                    print("a_loss_policy ", np.mean(a_loss))
+                    print("x_loss_policy ", np.mean(x_loss))
+                    print("x_loss_spawn ", np.mean(x_loss_spawn))
+                    print("x_loss_spine ", np.mean(x_loss_spine))
+                    print("first_v_loss", np.mean(losses[0]))
+                    print("first_a_loss", np.mean(losses[1]))
+                    print("first_x_select_loss", np.mean(losses[2]))
+                    print("first_x_spawn_loss", np.mean(losses[3]))
+                    print("first_x_spine_loss", np.mean(losses[4]))
 
-                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
-                print("total_loss ", total_loss)
-                print("total_loss mean ", np.mean(total_loss))
-                print("v_loss ", np.mean(v_loss))
-                print("a_loss_policy ", np.mean(a_loss))
-                print("x_loss_policy ", np.mean(x_loss))
-                print("x_loss_spawn ", np.mean(x_loss_spawn))
-                print("x_loss_spine ", np.mean(x_loss_spine))
-
-
-
-            for _ in range(0):
-                v_loss2 = self.network.train_value(a, r, r, np.ones(shape=(len(v), 1)), s, rnn_state, class_weights)
-                print("loss_value2 ", np.mean(v_loss2))
-            if((time.clock() - self.lastTime) > 30):
-                print("saving model")
-                while 1:
-                    try:
+        if((time.clock() - self.lastTime) > 60):
+            print("saving model")
+            while 1:
+                try:
+                    with self.save_lock:
                         brain.save()
-                        break
-                    except Exception as exp:
-                        print(exp)
-                        time.sleep(1)
-                self.lastTime = time.clock()
+                    break
+                except Exception as exp:
+                    print(exp)
+                    time.sleep(1)
+            self.lastTime = time.clock()
 
             # print "optimized done"
 
@@ -145,7 +147,7 @@ class Brain:
         self.network.restore()
 
     def train_push(self, train_queue, s, a, r, v, s_, rnn_state, a_policy):
-        with self.lock_queue:
+        #with self.lock_queue:
             train_queue[0].append(np.copy(s))
             train_queue[1].append(np.copy(a))
             train_queue[2].append(np.copy(r))
