@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 RUN_TIME = 300000
 THREADS = 50
@@ -26,7 +26,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .1
+EPS_STOP = .2
 EPS_STEPS = 75
 
 MIN_BATCH = 10000
@@ -183,12 +183,13 @@ class Agent:
         if s_ is None:
             game_data = []
             _, _, end_r, _, rnn_sate, a_policy = self.get_sample(self.memory, len(self.memory))
-            if r > 20:
-                print("I did geat! ", r)
+
             while len(self.memory) > 0:
                 n = len(self.memory)
                 s, a, r, s_, rnn_sate, a_policy = self.get_sample(self.memory, n)
-                if r > 99:
+                if r < 0:
+                    print("forgetting this game ", r)
+                elif r > 99:
                     raise Exception('Should not happen')
                     brain.push_great_game(s, a, r, v, s_, rnn_sate)
                 else:
@@ -211,7 +212,8 @@ class Agent:
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
-            send_s(self.r, game_data, key="gamesample")
+            if len(game_data) > 0:
+                send_s(self.r, game_data, key="gamesample")
             self.R = 0
 
         if len(self.memory) >= N_STEP_RETURN:
@@ -278,24 +280,28 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                a = -1
 
             elif a == 6:
                 _ = self.env.make_action(_a, x_spawningPool)
                 x_select_point = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                a = -1
 
             elif a == 9:
                 _ = self.env.make_action(_a, x_spineCrawler)
                 x_select_point = -1
                 x_spawningPool = -1
                 x_Gather = -1
+                a = -1
 
             elif a == 10:
                 _ = self.env.make_action(_a, x_Gather)
                 x_select_point = -1
                 x_spawningPool = -1
                 x_spineCrawler = -1
+                a = -1
 
             else:
                 _ = self.env.make_action(_a, -1)
@@ -324,7 +330,7 @@ class Environment(threading.Thread):
 
 
     def get_state(self, obs):
-        return [np.array( (get_screen_unit_type(obs) == 89), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) == 104), dtype="float32" )]
+        return [np.array( (get_screen_unit_type(obs) == 89), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) > 0), dtype="float32" )]
 
     def run(self):
         while not self.stop_signal:

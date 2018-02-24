@@ -13,7 +13,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
-OPTIMIZERS = 9
+OPTIMIZERS = 4
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -50,20 +50,20 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
-        for _ in range(20):
-            samples = recv_s(self.r, key="gamesample", count=50)
+        for _ in range(1):
+            samples = recv_s(self.r, key="gamesample", count=100)
             RNN_USED = False
             for sample in samples:
                 prev_rnn1 = [np.zeros((300), np.float32)]
                 prev_rnn2 = [np.zeros((300), np.float32)]
                 for e in sample:
-                    if random.random() > 0.1:
+                    if random.random() > 1:
                         continue
                     if RNN_USED:
                         out = self.network.predict([1] * 11, [[e[0][0]], [e[0][1]], [e[0][2]]],
                                          [prev_rnn1, prev_rnn2])
-                    e[5][0] = np.copy(prev_rnn1[0])
-                    e[5][1] = np.copy(prev_rnn2[0])
+                        e[5][0] = np.copy(prev_rnn1[0])
+                        e[5][1] = np.copy(prev_rnn2[0])
                     self.train_push(train_queue, *e)
                     if RNN_USED:
                         prev_rnn1 = [out[10][0][0]]
@@ -107,7 +107,7 @@ class Brain:
             losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
             print("first losses", losses)
 
-        for _ in range(20):
+        for _ in range(1):
             with self.gpu_lock:
                     total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
                     print("total_loss ", total_loss)
@@ -138,7 +138,7 @@ class Brain:
             # print "optimized done"
 
     def to_array(self, s, idx):
-        return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
+        return np.array(list(np.array(s)[:, idx]), dtype=np.float16)
 
     def save(self):
         self.network.save()
@@ -220,8 +220,11 @@ brain = Brain()  # brain is global in A3C
 
 opts = [Optimizer() for _ in range(OPTIMIZERS)]
 
+#time.sleep(10000)
+
 for o in opts:
     o.start()
+    time.sleep(10)
 
 
 time.sleep(RUN_TIME)
