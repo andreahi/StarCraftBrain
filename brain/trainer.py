@@ -7,13 +7,13 @@ import redis
 import numpy as np
 from Actions import get_action_map
 from Network import Network
-from redis_int.RedisUtil import recv_s
+from redis_int.RedisUtil import recv_s, send_s
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
-OPTIMIZERS = 4
+OPTIMIZERS = 8
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -50,8 +50,10 @@ class Brain:
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
         train_queue = [[], [], [], [], [], [], [], []]
+        print("starting optimize")
         for _ in range(1):
-            samples = recv_s(self.r, key="gamesample", count=100)
+
+            samples = recv_s(self.r, key="gamesample", count=-1)
             RNN_USED = False
             for sample in samples:
                 prev_rnn1 = [np.zeros((300), np.float32)]
@@ -68,48 +70,69 @@ class Brain:
                     if RNN_USED:
                         prev_rnn1 = [out[10][0][0]]
                         prev_rnn2 = [out[10][1][0]]
+        if len(train_queue[0]) > 0:
+            s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
 
-        s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
+            print("prepping training data")
+            s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
+            # s = np.stack(s, axis=1)
+            a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
+                 self.to_array(a, 3), self.to_array(a, 4)]
+            r = np.vstack(r)
+            v = np.vstack(v)
+            a_policy = np.vstack(a_policy)
+            # s_ = np.stack(s_, axis=1)
+            s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
 
-        print("prepping training data")
-        s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
-        # s = np.stack(s, axis=1)
-        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
-             self.to_array(a, 3), self.to_array(a, 4)]
-        r = np.vstack(r)
-        v = np.vstack(v)
-        a_policy = np.vstack(a_policy)
-        # s_ = np.stack(s_, axis=1)
-        s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
-        #for i in range(0, len(a)):
-        #    if r[i] > v[i]:
-        #        a_policy[i][np.argmax(a[0][i])] = 10
-        #    else:
-        #        a_policy[i][np.argmax(a[0][i])] = -10
-        #s_mask = np.vstack(s_mask)
-        rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
+            rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
 
-        if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-        class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-        class_weights = np.clip(class_weights, 1, 10)
-        # _, _, _, v, _ = self.predict(s_, rnn_state)
-        # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-        r = r  # set v to 0 where s_ is terminal state
-        print("a sum: ", np.sum(a[0] == 1, axis=0))
-        print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
-        print("rnn : ", rnn_state)
+            if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
+            class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
+            class_weights = np.clip(class_weights, 1, 10)
+            # _, _, _, v, _ = self.predict(s_, rnn_state)
+            # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
+            r = r  # set v to 0 where s_ is terminal state
+            print("a sum: ", np.sum(a[0] == 1, axis=0))
+            print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
+            print("rnn : ", rnn_state)
+        if True:
+            training_size = 5000
+            for i in range(len(train_queue[0])):
+                send_s(self.r, [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], r[i], v[i]], key="samplecache")
+            
+            s = [np.zeros(shape=(training_size, 84, 84), dtype=float), np.zeros(shape=(training_size, 17), dtype=float), np.zeros(shape=(training_size, 84, 84), dtype=float)]
+            a = [np.zeros(shape=(training_size, 11), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float)]
+            r = np.zeros(shape=(training_size,1), dtype=float)
+            v = np.zeros(shape=(training_size,1), dtype=float)
+
+            cached_samples = recv_s(self.r, key="samplecache", count=training_size, poplimit=200000)
+            for i in range(len(cached_samples)):
+                s[0][i] = cached_samples[i][0]
+                s[1][i] = cached_samples[i][1]
+                s[2][i] = cached_samples[i][2]
+
+                a[0][i] = cached_samples[i][3]
+                a[1][i] = cached_samples[i][4]
+                a[2][i] = cached_samples[i][5]
+                a[3][i] = cached_samples[i][6]
+                a[4][i] = cached_samples[i][7]
+
+                r[i][0] = cached_samples[i][8]
+                v[i][0] = cached_samples[i][9]
+
+
 
         if self.first_run:
             print("first run")
             self.first_run = False
         with self.gpu_lock:
 
-            losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy)
+            losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
             print("first losses", losses)
 
         for _ in range(1):
             with self.gpu_lock:
-                    total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, rnn_state, class_weights, a_policy, losses)
+                    total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [], losses)
                     print("total_loss ", total_loss)
                     print("total_loss mean ", np.mean(total_loss))
                     print("v_loss ", np.mean(v_loss))
@@ -123,7 +146,7 @@ class Brain:
                     print("first_x_spawn_loss", np.mean(losses[3]))
                     print("first_x_spine_loss", np.mean(losses[4]))
 
-        if((time.clock() - self.lastTime) > 60):
+        if((time.clock() - self.lastTime) > 600):
             print("saving model")
             while 1:
                 try:

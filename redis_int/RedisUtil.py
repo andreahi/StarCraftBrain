@@ -16,13 +16,14 @@ def send_s(socket, obj, key="trainingset", protocol=-1):
     z = zlib.compress(p)
     return socket.sadd(key, z)
 
-def recv_s(socket, key="trainingsample", count=1):
+def recv_s(socket, key="trainingsample", count=1, poplimit=0):
     #while socket.llen(key) < count:
     #    time.sleep(0.1)
+    if count == -1:
+        count = socket.scard(key)
     data_l = socket.srandmember(key, number=count)
 
-    while socket.scard(key) >= 100:
-        for _ in range(10):
+    while socket.scard(key) > poplimit:
             socket.spop(key)
     return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
 

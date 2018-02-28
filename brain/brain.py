@@ -13,7 +13,7 @@ from RandomUtils import weighted_random_index
 from SC2ENV import SC2Game
 from redis_int.RedisUtil import recv_zipped_pickle, send_s
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 RUN_TIME = 300000
 THREADS = 50
@@ -26,7 +26,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .2
+EPS_STOP = .3
 EPS_STEPS = 75
 
 MIN_BATCH = 10000
@@ -213,7 +213,8 @@ class Agent:
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
             if len(game_data) > 0:
-                send_s(self.r, game_data, key="gamesample")
+                for _ in range(10):
+                    send_s(self.r, game_data, key="gamesample")
             self.R = 0
 
         if len(self.memory) >= N_STEP_RETURN:

@@ -174,14 +174,14 @@ class Network:
         self.first_x_spine_loss = tf.placeholder(tf.float32, 1)
 
         self.first_v_loss = tf.Print(self.first_v_loss, [self.first_v_loss, tf.shape(self.first_v_loss)], "self.first_v_loss: ")
-        self.first_a_loss = tf.Print(self.first_a_loss, [self.first_a_loss, tf.shape(self.first_a_loss)], "self.first_a_loss: ")
+        self.first_a_loss = tf.Print(self.first_a_loss, [self.first_a_loss, tf.shape(self.first_a_loss)], "self.first_a_loss: ", name="self.first_a_loss")
         self.first_x_select_loss = tf.Print(self.first_x_select_loss, [self.first_x_select_loss, tf.shape(self.first_x_select_loss)], "self.first_x_select_loss")
         self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
         self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
 
         advantage = (self.value - self.r_t)
         advantage = tf.squeeze(advantage) #+ 1 * tf.sign(advantage)
-        advantage = advantage + .001 * tf.sign(advantage)
+        advantage = advantage + .000 * tf.sign(advantage)
         #advantage = tf.square(advantage) * tf.sign(advantage)
         advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
 
@@ -193,7 +193,7 @@ class Network:
         #a_log_prob = -tf.reduce_sum(self.class_weight * self.a_t * tf.sign(self.policy) * self.policy/tf.stop_gradient(self.policy), axis=1)
         a_log_prob = -tf.reduce_sum(a_log_soft * self.a_t * self.class_weight, axis=1) * 100
 
-        self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point) * 1000
+        self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point) * 100000
         self.x_loss_spawningPool = self.get_loss_one(advantage, self.policy_x_spawningPool, self.x_t_spawningPool) * 1000000
         self.x_loss_spineCrawler = self.get_loss_one(advantage, self.policy_x_spineCrawler, self.x_t_spineCrawler) * 1000000
         self.x_loss_Gather = self.get_loss_one(advantage, self.policy_x_Gather, self.x_t_Gather)
@@ -206,13 +206,13 @@ class Network:
         # with g.gradient_override_map({"Identity": "CustomGrad5"}):
         a_loss_policy = a_log_prob * tf.stop_gradient(advantage) # maximize policy
         target_error =  tf.square(
-            self.policy - tf.stop_gradient(10 *  self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
+            self.policy - tf.stop_gradient(1 *  self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
         target_error = tf.Print(target_error, [target_error, tf.shape(target_error)], "target_error: ")
 
-        self.target_loss = tf.reduce_mean(target_error * self.a_t, axis=0) + 0.0001
+        self.target_loss = tf.reduce_mean(target_error * self.a_t, axis=0)
         self.target_loss = tf.Print(self.target_loss, [self.target_loss, tf.shape(self.target_loss)], "self.target_loss: ")
 
-        self.a_loss_policy = tf.reduce_mean(target_error * self.a_t, axis=0)/(self.target_loss ) * 1000
+        self.a_loss_policy = tf.reduce_mean(tf.stop_gradient(tf.transpose(tf.abs([advantage]))) * target_error * self.a_t, axis=0) * 1000
 
 
         a_policy_entropy = tf.reduce_mean(tf.reduce_mean(np.square(self.policy))) * 0.0001
@@ -251,32 +251,34 @@ class Network:
         #                                                        + self.action_weight * self.x_loss_Gather + self.action_weight * self.y_loss_Gather
         #                                                       ))
 
-        self.a_loss_policy = tf.Print(self.a_loss_policy, [self.a_loss_policy, tf.shape(self.a_loss_policy)], "self.a_loss_policy: ")
+        self.a_loss_policy = tf.Print(self.a_loss_policy, [self.a_loss_policy, tf.shape(self.a_loss_policy)], "self.a_loss_policy: ", name="a_loss_print")
         self.x_loss_select_point = tf.Print(self.x_loss_select_point, [self.x_loss_select_point, tf.shape(self.x_loss_select_point)], "self.x_loss_select_point: ")
         self.x_loss_spawningPool = tf.Print(self.x_loss_spawningPool, [self.x_loss_spawningPool, tf.shape(self.x_loss_spawningPool)], "self.x_loss_spawningPool")
         self.x_loss_spineCrawler = tf.Print(self.x_loss_spineCrawler, [self.x_loss_spineCrawler, tf.shape(self.x_loss_spineCrawler)], "self.x_loss_spineCrawler")
         self.x_loss_Gather = tf.Print(self.x_loss_Gather, [self.x_loss_Gather, tf.shape(self.x_loss_Gather)], "self.x_loss_Gather")
 
-        a_loss_n = tf.reduce_sum(self.a_loss_policy / tf.stop_gradient(self.first_a_loss))
-        a_loss_n = tf.Print(a_loss_n, [a_loss_n, tf.shape(a_loss_n)], "a_loss_n")
+        self.a_loss_policy =  self.a_loss_policy
+        self.x_loss_select_point = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_select_point
+        self.x_loss_spawningPool = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spawningPool
+        self.x_loss_spineCrawler = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spineCrawler
 
         final_v_loss = tf.reduce_mean(self.v_loss) / tf.stop_gradient(self.first_v_loss)
         final_v_loss = tf.Print(final_v_loss, [final_v_loss, tf.shape(final_v_loss)], "final_v_loss")
 
-        final_a_loss = 0.02 * tf.reduce_mean(tf.stop_gradient(tf.transpose(tf.abs([advantage]))) * self.a_loss_policy)
+        final_a_loss = self.a_loss_policy/self.first_a_loss
         final_a_loss = tf.Print(final_a_loss, [final_a_loss, tf.shape(final_a_loss)], "final_a_loss")
 
-        final_select_loss = 10 * tf.reduce_mean(tf.stop_gradient(tf.abs(advantage)) * self.x_loss_select_point) / tf.stop_gradient(self.first_x_select_loss)
+        final_select_loss = tf.reduce_mean(self.x_loss_select_point) / tf.stop_gradient(self.first_x_select_loss)
         final_select_loss = tf.Print(final_select_loss, [final_select_loss, tf.shape(final_select_loss)], "final_select_loss")
 
-        final_spawn_loss = 10 * tf.reduce_mean(tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spawningPool) / tf.stop_gradient(self.first_x_spawn_loss)
+        final_spawn_loss = tf.reduce_mean(self.x_loss_spawningPool) / tf.stop_gradient(self.first_x_spawn_loss)
         final_spawn_loss = tf.Print(final_spawn_loss, [final_spawn_loss, tf.shape(final_spawn_loss)], "final_spawn_loss")
 
-        final_spine_loss = 10 * tf.reduce_mean(tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spineCrawler) / tf.stop_gradient(self.first_x_spine_loss)
+        final_spine_loss = tf.reduce_mean(self.x_loss_spineCrawler) / tf.stop_gradient(self.first_x_spine_loss)
         final_spine_loss = tf.Print(final_spine_loss, [final_spine_loss, tf.shape(final_spine_loss)], "final_spine_loss")
 
         self.total_loss = final_v_loss + \
-                          final_a_loss + \
+                          tf.reduce_sum(final_a_loss) + \
                           final_select_loss + \
                           final_spawn_loss + \
                           final_spine_loss  #+\
@@ -339,7 +341,7 @@ class Network:
         t_count = tf.Print(t_count, [t_count, tf.shape(t_count)], "t_count: ")
 
         loss = tf.reduce_mean(
-            tf.square(policy - (10 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
+            tf.square(policy - (1 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
             * t, axis=1)
 
         return loss  + value_regulizer
@@ -364,7 +366,7 @@ class Network:
         value = tf.squeeze(tf.multinomial(self.weights, 1), [1])
         return tf.one_hot(value, d)
 
-    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy, losses):
+    def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, losses):
 
         _, v_loss, total_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, reduced_adv = self.session.run(
             [self.minimize, self.v_loss, self.total_loss, self.a_loss_policy, self.x_loss_select_point, self.x_loss_spawningPool, self.x_loss_spineCrawler, self.reduced_adv],
@@ -380,13 +382,12 @@ class Network:
                        self.r_t: r,
                        self.v_t:v,
                        self.v_toggle: v_toggle,
-                       self.state_in[0]: rnn_state[0],
-                       self.state_in[1]: rnn_state[1],
-                       self.class_weight: class_weights,
+                       #self.state_in[0]: rnn_state[0],
+                       #self.state_in[1]: rnn_state[1],
+ #                      self.class_weight: class_weights,
                        self.action_weight: [1],
                        self.value_weight: [.00000],
-                       self.a_policy_target: a_policy,
-                       self.first_v_loss:np.array([np.mean(losses[0]) + 0.001]),
+                       self.first_v_loss:np.array([np.mean(losses[0]) + 0.00001]),
                        self.first_a_loss:np.array(losses[1] + 0.001),
                        self.first_x_select_loss:np.array([np.mean(losses[2]) + 0.001]),
                        self.first_x_spawn_loss:np.array([np.mean(losses[3]) + 0.001]),
@@ -394,7 +395,7 @@ class Network:
                        })
         return total_loss, v_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine
 
-    def get_losses(self, a, r, v, v_toggle, s, rnn_state, class_weights, a_policy):
+    def get_losses(self, a, r, v, v_toggle, s, rnn_state, class_weights):
 
         losses = self.session.run(
             [
@@ -415,12 +416,11 @@ class Network:
                        self.r_t: r,
                        self.v_t:v,
                        self.v_toggle: v_toggle,
-                       self.state_in[0]: rnn_state[0],
-                       self.state_in[1]: rnn_state[1],
-                       self.class_weight: class_weights,
+#                       self.state_in[0]: rnn_state[0],
+#                       self.state_in[1]: rnn_state[1],
+#                       self.class_weight: class_weights,
                        self.action_weight: [1],
                        self.value_weight: [.00000],
-                       self.a_policy_target: a_policy
                        })
         return losses
 
@@ -496,7 +496,7 @@ class Network:
                                  inputs=image_unit_type, num_outputs=128,
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
-        # type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
+        #type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
 
         type_conv2 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv1, num_outputs=128,
@@ -525,7 +525,7 @@ class Network:
 
         # type_conv2 = tf.Print(type_conv2, [type_conv2], "type_conv2: ")
 
-        type_flatten = slim.flatten(type_conv6)
+        type_flatten = slim.flatten(type_conv1)
         return type_flatten
 
 
