@@ -88,6 +88,7 @@ class Network:
         #rnn_out = hidden2
         hidden_out = slim.fully_connected(rnn_out, 100, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
         hidden_out = hidden2
+        hidden_out = tf.nn.dropout(hidden_out, .8)  # DROP-OUT here
 
 
         # Output layers for policy and value estimations
@@ -102,7 +103,7 @@ class Network:
         # self.y_sample = self.categorical_sample(self.policy_y, self.NUM_COORDS_Y)[0, :]
 
 
-        self.policy_x_select_point = slim.fully_connected(slim.fully_connected(hidden_out, 1000,
+        self.policy_x_select_point = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
                                                           7056,
@@ -111,7 +112,7 @@ class Network:
                                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                                           biases_initializer=None)
 
-        self.policy_x_spawningPool = slim.fully_connected(slim.fully_connected(hidden_out, 1000,
+        self.policy_x_spawningPool = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
                                                           7056,
@@ -119,7 +120,7 @@ class Network:
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           biases_initializer=None)
 
-        self.policy_x_spineCrawler = slim.fully_connected(slim.fully_connected(hidden_out, 1000,
+        self.policy_x_spineCrawler = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
                                                           7056,
@@ -129,7 +130,7 @@ class Network:
                                                           biases_initializer=None)
 
 
-        self.policy_x_Gather = slim.fully_connected(slim.fully_connected(hidden_out, 1000,
+        self.policy_x_Gather = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                          activation_fn=LeakyReLU(),
                                                                          weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
                                                     7056,
@@ -179,7 +180,7 @@ class Network:
         self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
         self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
 
-        advantage = (self.value - self.r_t)
+        advantage = (self.value - self.r_t) * 10
         advantage = tf.squeeze(advantage) #+ 1 * tf.sign(advantage)
         advantage = advantage + .000 * tf.sign(advantage)
         #advantage = tf.square(advantage) * tf.sign(advantage)
@@ -262,7 +263,7 @@ class Network:
         self.x_loss_spawningPool = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spawningPool
         self.x_loss_spineCrawler = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spineCrawler
 
-        final_v_loss = tf.reduce_mean(self.v_loss) / tf.stop_gradient(self.first_v_loss)
+        final_v_loss = 0.1 * tf.reduce_mean(self.v_loss) / tf.stop_gradient(self.first_v_loss)
         final_v_loss = tf.Print(final_v_loss, [final_v_loss, tf.shape(final_v_loss)], "final_v_loss")
 
         final_a_loss = self.a_loss_policy/self.first_a_loss
@@ -294,8 +295,6 @@ class Network:
         #gradients_value, variables_value = zip(*optimizer.compute_gradients(self.v_loss))
         #gradients_value, _ = tf.clip_by_global_norm(gradients_value, 10.0)
 
-        optimizer_value = tf.train.AdamOptimizer(1e-3)
-        self.minimize_value = optimizer_value.minimize(self.v_loss)
         #self.minimize_value = optimizer.apply_gradients(zip(gradients_value, variables_value))
 
         # optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE)
@@ -525,7 +524,7 @@ class Network:
 
         # type_conv2 = tf.Print(type_conv2, [type_conv2], "type_conv2: ")
 
-        type_flatten = slim.flatten(type_conv1)
+        type_flatten = slim.flatten(type_conv2)
         return type_flatten
 
 

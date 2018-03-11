@@ -96,7 +96,7 @@ class Brain:
             print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
             print("rnn : ", rnn_state)
         if True:
-            training_size = 5000
+            training_size = 8000
             for i in range(len(train_queue[0])):
                 send_s(self.r, [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], r[i], v[i]], key="samplecache")
             
@@ -106,19 +106,19 @@ class Brain:
             v = np.zeros(shape=(training_size,1), dtype=float)
 
             cached_samples = recv_s(self.r, key="samplecache", count=training_size, poplimit=200000)
-            for i in range(len(cached_samples)):
-                s[0][i] = cached_samples[i][0]
-                s[1][i] = cached_samples[i][1]
-                s[2][i] = cached_samples[i][2]
 
-                a[0][i] = cached_samples[i][3]
-                a[1][i] = cached_samples[i][4]
-                a[2][i] = cached_samples[i][5]
-                a[3][i] = cached_samples[i][6]
-                a[4][i] = cached_samples[i][7]
+            s[0] = self.to_array(cached_samples,0)
+            s[1] = self.to_array(cached_samples,1)
+            s[2] = self.to_array(cached_samples,2)
 
-                r[i][0] = cached_samples[i][8]
-                v[i][0] = cached_samples[i][9]
+            a[0] = self.to_array(cached_samples,3)
+            a[1] = self.to_array(cached_samples,4)
+            a[2] = self.to_array(cached_samples,5)
+            a[3] = self.to_array(cached_samples,6)
+            a[4] = self.to_array(cached_samples,7)
+
+            r = self.to_array(cached_samples,8)
+            v = self.to_array(cached_samples,9)
 
 
 
@@ -140,13 +140,17 @@ class Brain:
                     print("x_loss_policy ", np.mean(x_loss))
                     print("x_loss_spawn ", np.mean(x_loss_spawn))
                     print("x_loss_spine ", np.mean(x_loss_spine))
+
+
+                    losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
+
                     print("first_v_loss", np.mean(losses[0]))
                     print("first_a_loss", np.mean(losses[1]))
                     print("first_x_select_loss", np.mean(losses[2]))
                     print("first_x_spawn_loss", np.mean(losses[3]))
                     print("first_x_spine_loss", np.mean(losses[4]))
 
-        if((time.clock() - self.lastTime) > 600):
+        if((time.clock() - self.lastTime) > 300):
             print("saving model")
             while 1:
                 try:
@@ -243,11 +247,11 @@ brain = Brain()  # brain is global in A3C
 
 opts = [Optimizer() for _ in range(OPTIMIZERS)]
 
-#time.sleep(10000)
+time.sleep(1)
 
 for o in opts:
     o.start()
-    time.sleep(10)
+    time.sleep(10000)
 
 
 time.sleep(RUN_TIME)

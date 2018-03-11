@@ -3,6 +3,7 @@ import pickle
 import zlib
 import time
 
+import numpy as np
 
 def send_zipped_pickle(socket, obj, key="trainingset", protocol=-1):
     """pickle an object, and zip the pickle before sending it"""
@@ -26,6 +27,9 @@ def recv_s(socket, key="trainingsample", count=1, poplimit=0):
     while socket.scard(key) > poplimit:
             socket.spop(key)
     return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
+
+def to_array(s):
+    return np.array(list(np.array(s)), dtype=np.float16)
 
 def recv_range(socket, key="trainingsample", count=1):
     while socket.llen(key) < count:
