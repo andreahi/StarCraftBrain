@@ -11,12 +11,11 @@ from tensorflow.python.training.optimizer import _OptimizableVariable
 
 
 class Network:
-    NUM_ACTIONS = 11
-    NUM_COORDS_X = 7056
-    NUM_COORDS_Y = 7056
+    NUM_ACTIONS = 12
+    NUM_COORDS_X = 1764
 
     INPUT_IMAGE = 84
-    NUM_SINGLE = 17
+    NUM_SINGLE = 18
 
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
@@ -106,7 +105,7 @@ class Network:
         self.policy_x_select_point = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
-                                                          7056,
+                                                          1764,
                                                           activation_fn=None,
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
@@ -115,7 +114,7 @@ class Network:
         self.policy_x_spawningPool = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
-                                                          7056,
+                                                          1764,
                                                           activation_fn=None,
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           biases_initializer=None)
@@ -123,7 +122,7 @@ class Network:
         self.policy_x_spineCrawler = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                                activation_fn=LeakyReLU(),
                                                                                weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
-                                                          7056,
+                                                          1764,
                                                           activation_fn=None,
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
@@ -133,7 +132,16 @@ class Network:
         self.policy_x_Gather = slim.fully_connected(slim.fully_connected(hidden_out, 10,
                                                                          activation_fn=LeakyReLU(),
                                                                          weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
-                                                    7056,
+                                                    1764,
+                                                    activation_fn=None,
+                                                    weights_initializer=normalized_columns_initializer(0.01),
+                                                    weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
+                                                    biases_initializer=None)
+
+        self.policy_x_extractor = slim.fully_connected(slim.fully_connected(hidden_out, 10,
+                                                                         activation_fn=LeakyReLU(),
+                                                                         weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
+                                                       1764,
                                                     activation_fn=None,
                                                     weights_initializer=normalized_columns_initializer(0.01),
                                                     weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
@@ -152,8 +160,8 @@ class Network:
         self.x_t_spawningPool = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_X), name="x_t_spawningPool")
 
         self.x_t_spineCrawler = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_X), name="x_t_spineCrawler")
-
         self.x_t_Gather = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_X), name="x_t_Gather")
+        self.x_t_extractor = tf.placeholder(tf.float32, shape=(None, self.NUM_COORDS_X), name="x_t_spineCrawler")
 
         self.a_t = tf.placeholder(tf.float32, shape=(None, self.NUM_ACTIONS), name="a_t")
         self.r_t = tf.placeholder(tf.float32, shape=(None, 1),
@@ -169,7 +177,7 @@ class Network:
         self.value_weight = tf.placeholder(tf.float32, 1)
 
         self.first_v_loss = tf.placeholder(tf.float32, 1)
-        self.first_a_loss = tf.placeholder(tf.float32, 11)
+        self.first_a_loss = tf.placeholder(tf.float32, 12)
         self.first_x_select_loss = tf.placeholder(tf.float32, 1)
         self.first_x_spawn_loss = tf.placeholder(tf.float32, 1)
         self.first_x_spine_loss = tf.placeholder(tf.float32, 1)
@@ -180,7 +188,7 @@ class Network:
         self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
         self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
 
-        advantage = (self.value - self.r_t) * 10
+        advantage = (self.value - self.r_t) * 100
         advantage = tf.squeeze(advantage) #+ 1 * tf.sign(advantage)
         advantage = advantage + .000 * tf.sign(advantage)
         #advantage = tf.square(advantage) * tf.sign(advantage)
@@ -197,7 +205,8 @@ class Network:
         self.x_loss_select_point = self.get_loss_one(advantage, self.policy_x_select_point, self.x_t_select_point) * 100000
         self.x_loss_spawningPool = self.get_loss_one(advantage, self.policy_x_spawningPool, self.x_t_spawningPool) * 1000000
         self.x_loss_spineCrawler = self.get_loss_one(advantage, self.policy_x_spineCrawler, self.x_t_spineCrawler) * 1000000
-        self.x_loss_Gather = self.get_loss_one(advantage, self.policy_x_Gather, self.x_t_Gather)
+        self.x_loss_extractor = self.get_loss_one(advantage, self.policy_x_extractor, self.x_t_extractor) * 1000000
+        self.x_loss_Gather = self.get_loss_one(advantage, self.policy_x_Gather, self.x_t_Gather) * 1000000
 
 
 
@@ -241,7 +250,7 @@ class Network:
         self.v_loss = loss_value
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
 
-        optimizer = tf.train.AdamOptimizer(1e-6)
+        optimizer = tf.train.AdamOptimizer(1e-7)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         #gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
@@ -256,34 +265,55 @@ class Network:
         self.x_loss_select_point = tf.Print(self.x_loss_select_point, [self.x_loss_select_point, tf.shape(self.x_loss_select_point)], "self.x_loss_select_point: ")
         self.x_loss_spawningPool = tf.Print(self.x_loss_spawningPool, [self.x_loss_spawningPool, tf.shape(self.x_loss_spawningPool)], "self.x_loss_spawningPool")
         self.x_loss_spineCrawler = tf.Print(self.x_loss_spineCrawler, [self.x_loss_spineCrawler, tf.shape(self.x_loss_spineCrawler)], "self.x_loss_spineCrawler")
+        self.x_loss_extractor = tf.Print(self.x_loss_extractor, [self.x_loss_extractor, tf.shape(self.x_loss_extractor)], "self.x_loss_extractor")
         self.x_loss_Gather = tf.Print(self.x_loss_Gather, [self.x_loss_Gather, tf.shape(self.x_loss_Gather)], "self.x_loss_Gather")
 
         self.a_loss_policy =  self.a_loss_policy
         self.x_loss_select_point = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_select_point
         self.x_loss_spawningPool = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spawningPool
         self.x_loss_spineCrawler = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_spineCrawler
+        self.x_loss_extractor = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_extractor
+        self.x_loss_Gather = tf.stop_gradient(tf.abs(advantage)) * self.x_loss_Gather
 
-        final_v_loss = 0.1 * tf.reduce_mean(self.v_loss) / tf.stop_gradient(self.first_v_loss)
+        final_v_loss = 10 * tf.reduce_mean(self.v_loss) / tf.stop_gradient(tf.reduce_mean(self.v_loss) + 0.00000001)
         final_v_loss = tf.Print(final_v_loss, [final_v_loss, tf.shape(final_v_loss)], "final_v_loss")
 
-        final_a_loss = self.a_loss_policy/self.first_a_loss
+        final_a_loss = self.a_loss_policy/tf.stop_gradient(self.a_loss_policy+ 0.00000001)
         final_a_loss = tf.Print(final_a_loss, [final_a_loss, tf.shape(final_a_loss)], "final_a_loss")
 
-        final_select_loss = tf.reduce_mean(self.x_loss_select_point) / tf.stop_gradient(self.first_x_select_loss)
+        final_select_loss = tf.reduce_mean(self.x_loss_select_point) / tf.stop_gradient(tf.reduce_mean(self.x_loss_select_point) + 0.00000001)
         final_select_loss = tf.Print(final_select_loss, [final_select_loss, tf.shape(final_select_loss)], "final_select_loss")
 
-        final_spawn_loss = tf.reduce_mean(self.x_loss_spawningPool) / tf.stop_gradient(self.first_x_spawn_loss)
+        final_spawn_loss = tf.reduce_mean(self.x_loss_spawningPool) / (tf.stop_gradient(tf.reduce_mean(self.x_loss_spawningPool)+ 0.00000001))
         final_spawn_loss = tf.Print(final_spawn_loss, [final_spawn_loss, tf.shape(final_spawn_loss)], "final_spawn_loss")
 
-        final_spine_loss = tf.reduce_mean(self.x_loss_spineCrawler) / tf.stop_gradient(self.first_x_spine_loss)
+        final_spine_loss = tf.reduce_mean(self.x_loss_spineCrawler) / (tf.stop_gradient(tf.reduce_mean(self.x_loss_spineCrawler)+ 0.00000001))
         final_spine_loss = tf.Print(final_spine_loss, [final_spine_loss, tf.shape(final_spine_loss)], "final_spine_loss")
+
+        final_extractor_loss = tf.reduce_mean(self.x_loss_extractor) / (tf.stop_gradient(tf.reduce_mean(self.x_loss_extractor)+ 0.00000001))
+        final_extractor_loss = tf.Print(final_extractor_loss, [final_extractor_loss, tf.shape(final_extractor_loss)], "final_extractor_loss")
+
+        final_gather_loss = tf.reduce_mean(self.x_loss_Gather) / tf.stop_gradient(tf.reduce_mean((self.x_loss_Gather) + 0.00000001))
+        final_gather_loss = tf.Print(final_gather_loss, [final_gather_loss, tf.shape(final_gather_loss)], "final_gather_loss")
+
+        positive_loss =  \
+            tf.reduce_mean(tf.reduce_mean(self.policy_x_select_point)) \
+            + tf.reduce_mean(tf.reduce_mean(self.policy_x_spawningPool)) \
+            + tf.reduce_mean(tf.reduce_mean(self.policy_x_spineCrawler)) \
+            + tf.reduce_mean(tf.reduce_mean(self.policy_x_Gather)) \
+            + tf.reduce_mean(tf.reduce_mean(self.policy_x_extractor))
+        positive_loss = .01* positive_loss
+        positive_loss = tf.Print(positive_loss, [positive_loss, tf.shape(positive_loss)], "positive_loss")
 
         self.total_loss = final_v_loss + \
                           tf.reduce_sum(final_a_loss) + \
                           final_select_loss + \
                           final_spawn_loss + \
-                          final_spine_loss  #+\
-                          #self.x_loss_Gather
+                          final_spine_loss  + \
+                          final_extractor_loss  + \
+                          final_gather_loss + \
+            - (positive_loss)
+             
         self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss) #- tf.reduce_mean(tf.reduce_mean(self.policy_x_spineCrawler)/10000)
                                            )
         #gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
@@ -367,8 +397,8 @@ class Network:
 
     def train(self, a, r, v, v_toggle, s, rnn_state, class_weights, losses):
 
-        _, v_loss, total_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, reduced_adv = self.session.run(
-            [self.minimize, self.v_loss, self.total_loss, self.a_loss_policy, self.x_loss_select_point, self.x_loss_spawningPool, self.x_loss_spineCrawler, self.reduced_adv],
+        _, v_loss, total_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, x_loss_gather, x_loss_extractor, reduced_adv = self.session.run(
+            [self.minimize, self.v_loss, self.total_loss, self.a_loss_policy, self.x_loss_select_point, self.x_loss_spawningPool, self.x_loss_spineCrawler, self.x_loss_Gather, self.x_loss_extractor, self.reduced_adv],
             feed_dict={
                        self.inputs_unit_type: s[0],
                        self.inputs_workers: s[2],
@@ -378,9 +408,10 @@ class Network:
                        self.x_t_spawningPool: a[2],
                        self.x_t_spineCrawler: a[3],
                        self.x_t_Gather: a[4],
+                       self.x_t_extractor: a[5],
                        self.r_t: r,
                        self.v_t:v,
-                       self.v_toggle: v_toggle,
+                       #self.v_toggle: v_toggle,
                        #self.state_in[0]: rnn_state[0],
                        #self.state_in[1]: rnn_state[1],
  #                      self.class_weight: class_weights,
@@ -388,11 +419,11 @@ class Network:
                        self.value_weight: [.00000],
                        self.first_v_loss:np.array([np.mean(losses[0]) + 0.00001]),
                        self.first_a_loss:np.array(losses[1] + 0.001),
-                       self.first_x_select_loss:np.array([np.mean(losses[2]) + 0.001]),
-                       self.first_x_spawn_loss:np.array([np.mean(losses[3]) + 0.001]),
-                       self.first_x_spine_loss:np.array([np.mean(losses[4]) + 0.001])
+                       self.first_x_select_loss:np.array([np.mean(losses[2]) + 0.000001]),
+                       self.first_x_spawn_loss:np.array([np.mean(losses[3]) + 0.000001]),
+                       self.first_x_spine_loss:np.array([np.mean(losses[4]) + 0.000001])
                        })
-        return total_loss, v_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine
+        return total_loss, v_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, x_loss_gather, x_loss_extractor
 
     def get_losses(self, a, r, v, v_toggle, s, rnn_state, class_weights):
 
@@ -412,9 +443,10 @@ class Network:
                        self.x_t_spawningPool: a[2],
                        self.x_t_spineCrawler: a[3],
                        self.x_t_Gather: a[4],
+                       self.x_t_extractor: a[5],
                        self.r_t: r,
                        self.v_t:v,
-                       self.v_toggle: v_toggle,
+                       #self.v_toggle: v_toggle,
 #                       self.state_in[0]: rnn_state[0],
 #                       self.state_in[1]: rnn_state[1],
 #                       self.class_weight: class_weights,
@@ -435,7 +467,7 @@ class Network:
 
     def predict(self, available_actions, s, batch_rnn_state):
         with self.default_graph.as_default():
-            state_out, policy, policy_x_select_point, policy_x_spawningPool, policy_x_spineCrawler, policy_x_Gather, v, batch_rnn_state = \
+            state_out, policy, policy_x_select_point, policy_x_spawningPool, policy_x_spineCrawler, policy_x_Gather, policy_x_extractor, v, batch_rnn_state = \
                 self.session.run([
                                   self.state_out,
                                   self.policy,
@@ -443,6 +475,7 @@ class Network:
                                   self.policy_x_spawningPool,
                                   self.policy_x_spineCrawler,
                                   self.policy_x_Gather,
+                                  self.policy_x_extractor,
                                   self.value,
                                   self.state_out],
                                  feed_dict={
@@ -464,7 +497,8 @@ class Network:
                 policy[i][2] = max(policy_x_select_point[i])
                 policy[i][6] = max(policy_x_spawningPool[i])
                 policy[i][9] = max(policy_x_spineCrawler[i])
-                policy[i][10] = min(policy[i])#max(policy_x_Gather[i])
+                policy[i][10] = max(policy_x_Gather[i])
+                policy[i][11] = max(policy_x_extractor[i])
             if r_value > 0.99:
                 print("after policy: ", policy)
 
@@ -473,9 +507,10 @@ class Network:
             x_spawningPool = [self.normalized_multinomial(1, p, 100000000) for p in policy_x_spawningPool]
             x_spineCrawler = [self.normalized_multinomial(1, p, 100000000) for p in policy_x_spineCrawler]
             x_Gather = [self.normalized_multinomial(1, p, 100000000) for p in policy_x_Gather]
+            x_extractor = [self.normalized_multinomial(1, p, 100000000) for p in policy_x_extractor]
 
 
-            return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, state_out, policy[0]
+            return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, state_out, policy[0]
 
     def normalized_multinomial(self, available_actions, policy, n=1):
         policy[np.where(np.array(available_actions) != 1)] = max(policy)

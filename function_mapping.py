@@ -27,6 +27,7 @@ Function.ability(331, "Move_screen", cmd_screen, 16),
 Function.ability(59, "Build_Hatchery_screen", cmd_screen, 1152),
 Function.ui_func(7, "select_army", select_army,
                      lambda obs: obs.player_common.army_count > 0),
+Function.ability(52, "Build_Extractor_screen", cmd_screen, 1154),
 
 out["player"] = np.array([
     obs.player_common.player_id,

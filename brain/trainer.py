@@ -43,6 +43,7 @@ class Brain:
         self.network = Network()
         self.first_run = True
         self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+        self.redis_local = redis.StrictRedis(host='localhost', port=6379, db=0)
         self.lastTime = time.clock()
         np.set_printoptions(threshold=12)
 
@@ -77,7 +78,7 @@ class Brain:
             s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
             # s = np.stack(s, axis=1)
             a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
-                 self.to_array(a, 3), self.to_array(a, 4)]
+                 self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5)]
             r = np.vstack(r)
             v = np.vstack(v)
             a_policy = np.vstack(a_policy)
@@ -98,14 +99,15 @@ class Brain:
         if True:
             training_size = 8000
             for i in range(len(train_queue[0])):
-                send_s(self.r, [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], r[i], v[i]], key="samplecache")
-            
+                send_s(self.r, [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], r[i], v[i]], key="samplecache")
+
             s = [np.zeros(shape=(training_size, 84, 84), dtype=float), np.zeros(shape=(training_size, 17), dtype=float), np.zeros(shape=(training_size, 84, 84), dtype=float)]
-            a = [np.zeros(shape=(training_size, 11), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float), np.zeros(shape=(training_size, 7056), dtype=float)]
+            a = [np.zeros(shape=(training_size, 11), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764),  dtype=float), np.zeros(shape=(training_size, 1764),  dtype=float)]
             r = np.zeros(shape=(training_size,1), dtype=float)
             v = np.zeros(shape=(training_size,1), dtype=float)
 
-            cached_samples = recv_s(self.r, key="samplecache", count=training_size, poplimit=200000)
+            cached_samples = recv_s(self.redis_local, key="samplecache", count=training_size, poplimit=9999999999)
+            _ = recv_s(self.r, key="samplecache", poplimit=20000)
 
             s[0] = self.to_array(cached_samples,0)
             s[1] = self.to_array(cached_samples,1)
@@ -116,9 +118,10 @@ class Brain:
             a[2] = self.to_array(cached_samples,5)
             a[3] = self.to_array(cached_samples,6)
             a[4] = self.to_array(cached_samples,7)
+            a[5] = self.to_array(cached_samples,8)
 
-            r = self.to_array(cached_samples,8)
-            v = self.to_array(cached_samples,9)
+            r = self.to_array(cached_samples,9)
+            v = self.to_array(cached_samples,10)
 
 
 
@@ -126,30 +129,31 @@ class Brain:
             print("first run")
             self.first_run = False
         with self.gpu_lock:
+            print("getting first losses")
 
             losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
             print("first losses", losses)
 
-        for _ in range(1):
-            with self.gpu_lock:
-                    total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [], losses)
-                    print("total_loss ", total_loss)
-                    print("total_loss mean ", np.mean(total_loss))
-                    print("v_loss ", np.mean(v_loss))
-                    print("a_loss_policy ", np.mean(a_loss))
-                    print("x_loss_policy ", np.mean(x_loss))
-                    print("x_loss_spawn ", np.mean(x_loss_spawn))
-                    print("x_loss_spine ", np.mean(x_loss_spine))
+            for _ in range(10):
+                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [], losses)
+                print("total_loss ", total_loss)
+                print("total_loss mean ", np.mean(total_loss))
+                print("v_loss ", np.mean(v_loss))
+                print("a_loss_policy ", np.mean(a_loss))
+                print("x_loss_policy ", np.mean(x_loss))
+                print("x_loss_spawn ", np.mean(x_loss_spawn))
+                print("x_loss_spine ", np.mean(x_loss_spine))
+                print("x_loss_gather ", np.mean(x_loss_gather))
+                print("x_loss_extractor ", np.mean(x_loss_extractor))
 
 
-                    losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
-
-                    print("first_v_loss", np.mean(losses[0]))
-                    print("first_a_loss", np.mean(losses[1]))
-                    print("first_x_select_loss", np.mean(losses[2]))
-                    print("first_x_spawn_loss", np.mean(losses[3]))
-                    print("first_x_spine_loss", np.mean(losses[4]))
-
+                #losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
+                #print("first_v_loss", np.mean(losses[0]))
+                #print("first_a_loss", np.mean(losses[1]))
+                #print("first_x_select_loss", np.mean(losses[2]))
+                #print("first_x_spawn_loss", np.mean(losses[3]))
+                #print("first_x_spine_loss", np.mean(losses[4]))
+        print("training done")
         if((time.clock() - self.lastTime) > 300):
             print("saving model")
             while 1:
@@ -165,7 +169,7 @@ class Brain:
             # print "optimized done"
 
     def to_array(self, s, idx):
-        return np.array(list(np.array(s)[:, idx]), dtype=np.float16)
+        return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
 
     def save(self):
         self.network.save()
@@ -251,7 +255,7 @@ time.sleep(1)
 
 for o in opts:
     o.start()
-    time.sleep(10000)
+    time.sleep(10)
 
 
 time.sleep(RUN_TIME)

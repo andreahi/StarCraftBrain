@@ -16,7 +16,7 @@ from redis_int.RedisUtil import recv_zipped_pickle, send_s
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 RUN_TIME = 300000
-THREADS = 50
+THREADS = 20
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
@@ -26,7 +26,7 @@ N_STEP_RETURN = 10100
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = .5
-EPS_STOP = .03
+EPS_STOP = .1
 EPS_STEPS = 75
 
 MIN_BATCH = 10000
@@ -129,7 +129,7 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, rnn_state, a_policy =\
+        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, rnn_state, a_policy =\
             brain.predict(available_actions, [[s[0]], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
 
@@ -138,18 +138,20 @@ class Agent:
         x_spawningPool = x_spawningPool[0]
         x_spineCrawler = x_spineCrawler[0]
         x_Gather = x_Gather[0]
+        x_extractor = x_extractor[0]
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
-                x_select_point = np.random.randint(0, 7056)
-                x_spawningPool = np.random.randint(0, 7056)
-                x_spineCrawler = np.random.randint(0, 7056)
-                x_Gather = np.random.randint(0, 7056)
+                x_select_point = np.random.randint(0, 1764)
+                x_spawningPool = np.random.randint(0, 1764)
+                x_spineCrawler = np.random.randint(0, 1764)
+                x_Gather = np.random.randint(0, 1764)
+                x_extractor = np.random.randint(0, 1764)
 
-        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather,  v, _rnn_state, a_policy
+        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor,  v, _rnn_state, a_policy
 
     def get_sample(self, memory, n):
         s, a, _, _, rnn_sate, a_policy = memory[0]
@@ -160,10 +162,11 @@ class Agent:
     def train(self, s, a, r, v, s_, rnn_sate, a_policy):
 
         a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
-        x_select_cats = np.zeros(7056)  # turn action into one-hot representation
-        x_spawningPool = np.zeros(7056)  # turn action into one-hot representation
-        x_spineCrawler = np.zeros(7056)  # turn action into one-hot representation
-        x_Gather = np.zeros(7056)  # turn action into one-hot representation
+        x_select_cats = np.zeros(1764)  # turn action into one-hot representation
+        x_spawningPool = np.zeros(1764)  # turn action into one-hot representation
+        x_spineCrawler = np.zeros(1764)  # turn action into one-hot representation
+        x_Gather = np.zeros(1764)  # turn action into one-hot representation
+        x_extractor = np.zeros(1764)  # turn action into one-hot representation
         if a[0] != -1:
             #a_cats = (np.ones(NUM_ACTIONS) * -1) /(NUM_ACTIONS - 1)
             a_cats[a[0]] = 1
@@ -175,8 +178,10 @@ class Agent:
             x_spineCrawler[a[3]] = 1
         if a[4] != -1:
             x_Gather[a[4]] = 1
+        if a[5] != -1:
+            x_extractor[a[5]] = 1
 
-        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather]), np.copy(r), s_, rnn_sate, a_policy))
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather, x_extractor]), np.copy(r), s_, rnn_sate, a_policy))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
@@ -266,7 +271,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
+            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -281,6 +286,7 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                x_extractor = -1
                 a = -1
 
             elif a == 6:
@@ -288,6 +294,7 @@ class Environment(threading.Thread):
                 x_select_point = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                x_extractor = -1
                 a = -1
 
             elif a == 9:
@@ -295,6 +302,7 @@ class Environment(threading.Thread):
                 x_select_point = -1
                 x_spawningPool = -1
                 x_Gather = -1
+                x_extractor = -1
                 a = -1
 
             elif a == 10:
@@ -302,7 +310,15 @@ class Environment(threading.Thread):
                 x_select_point = -1
                 x_spawningPool = -1
                 x_spineCrawler = -1
+                x_extractor = -1
                 a = -1
+
+            elif a == 11:
+                _ = self.env.make_action(_a, x_extractor)
+                x_select_point = -1
+                x_spawningPool = -1
+                x_spineCrawler = -1
+                x_Gather = -1
 
             else:
                 _ = self.env.make_action(_a, -1)
@@ -310,6 +326,8 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                x_extractor = -1
+
 
             done, obs, r = self.env.get_state()
 
@@ -320,7 +338,7 @@ class Environment(threading.Thread):
             else:
                 s_ = self.get_state(obs)
             with self.lock_queue:
-                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather], r, v, s_, rnn_state, a_policy)
+                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_
