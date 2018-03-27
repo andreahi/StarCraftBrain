@@ -111,6 +111,10 @@ class Agent:
 
     def reset(self):
         # pass
+        if random.random() > 0.8:
+            self.epsilon = random.random()/2
+        else:
+            self.epsilon = 0.0
         self.rnn_state = self.get_lstm_init_state()
 
     def get_lstm_init_state(self):
@@ -119,6 +123,7 @@ class Agent:
         return [c_init, h_init]
 
     def getEpsilon(self):
+        return self.epsilon
         if (frames >= self.eps_steps):
             return self.eps_end
         else:
@@ -319,6 +324,7 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                a = -1
 
             else:
                 _ = self.env.make_action(_a, -1)
