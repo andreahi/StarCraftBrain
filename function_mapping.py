@@ -24,6 +24,7 @@ Function.ability(19, "Scan_Move_screen", cmd_screen, 19, 3674),
 Function.ability(331, "Move_screen", cmd_screen, 16),
 
 #zerg+
+Function.ability(264, "Harvest_Gather_screen", cmd_screen, 3666),
 Function.ability(59, "Build_Hatchery_screen", cmd_screen, 1152),
 Function.ui_func(7, "select_army", select_army,
                      lambda obs: obs.player_common.army_count > 0),

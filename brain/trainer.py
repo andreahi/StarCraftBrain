@@ -107,7 +107,7 @@ class Brain:
             v = np.zeros(shape=(training_size,1), dtype=float)
 
             cached_samples = recv_s(self.redis_local, key="samplecache", count=training_size, poplimit=9999999999)
-            _ = recv_s(self.r, key="samplecache", poplimit=20000)
+            _ = recv_s(self.r, key="samplecache", poplimit=100000)
 
             s[0] = self.to_array(cached_samples,0)
             s[1] = self.to_array(cached_samples,1)
@@ -128,14 +128,21 @@ class Brain:
         if self.first_run:
             print("first run")
             self.first_run = False
+
+        images = s[2]
+        mean_images = np.mean(images, axis=0)
+        diff_images = np.mean(np.mean(abs(mean_images - images), axis=1), axis=1)
+        weights = [np.square(diff_images)]
+        weights = (weights - np.min(weights)) / (np.max(weights) - np.min(weights))
+
         with self.gpu_lock:
             print("getting first losses")
 
-            losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
-            print("first losses", losses)
+            #losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
+            #print("first losses", losses)
 
             for _ in range(10):
-                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [], losses)
+                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, weights)
                 print("total_loss ", total_loss)
                 print("total_loss mean ", np.mean(total_loss))
                 print("v_loss ", np.mean(v_loss))
@@ -154,7 +161,7 @@ class Brain:
                 #print("first_x_spawn_loss", np.mean(losses[3]))
                 #print("first_x_spine_loss", np.mean(losses[4]))
         print("training done")
-        if((time.clock() - self.lastTime) > 300):
+        if((time.clock() - self.lastTime) > 30):
             print("saving model")
             while 1:
                 try:
@@ -255,7 +262,7 @@ time.sleep(1)
 
 for o in opts:
     o.start()
-    time.sleep(10)
+    time.sleep(5)
 
 
 time.sleep(RUN_TIME)
