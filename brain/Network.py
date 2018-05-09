@@ -20,7 +20,7 @@ class Network:
     LEARNING_RATE = 1e-7
     LOSS_V = .1  # v loss coefficient
     LOSS_ENTROPY = .001 # entropy coefficient
-    WEIGHT_DECAY = 0.000
+    WEIGHT_DECAY = 1.0
     def __init__(self):
         self.session = tf.Session(config=tf.ConfigProto(log_device_placement=False))
         np.set_printoptions(precision=3)
@@ -60,18 +60,13 @@ class Network:
 
         type_flatten = self.get_flatten_conv(self.inputs_unit_type)
         workers_flatten = self.get_flatten_conv(self.inputs_workers)
-        type_flatten_value = self.get_flatten_conv(self.inputs_unit_type)
-        workers_flatten_value = self.get_flatten_conv(self.inputs_workers)
 
+        value_hidden2 = self.get_network()
 
         flatten = tf.concat([type_flatten, self.input_player, workers_flatten], axis=1)
-        flatten_value = tf.concat([type_flatten_value, self.input_player, workers_flatten_value], axis=1)
+        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU())
+        hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU())
 
-        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
-        hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
-
-        value_hidden1 = slim.fully_connected(flatten_value, 1, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
-        value_hidden2 = slim.fully_connected(value_hidden1, 1, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
 
 
         self.batchsize = tf.placeholder(tf.int32, None, name='a')
@@ -87,7 +82,7 @@ class Network:
         #rnn_out = hidden2
         hidden_out = slim.fully_connected(rnn_out, 100, activation_fn=LeakyReLU(), weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
         hidden_out = hidden2
-        hidden_out = tf.nn.dropout(hidden_out, .8)  # DROP-OUT here
+        hidden_out = tf.nn.dropout(hidden_out, .9)  # DROP-OUT here
 
 
         # Output layers for policy and value estimations
@@ -95,62 +90,69 @@ class Network:
                                            activation_fn=None,
                                            weights_initializer=normalized_columns_initializer(0.01),
                                            weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                           biases_initializer=None)
+                                           )
         self.available_actions = tf.placeholder(tf.float32, shape=(self.NUM_ACTIONS), name="x_t")
         # self.a_sample = self.categorical_sample(self.policy, self.NUM_ACTIONS)[0, :]
         # self.x_sample = self.categorical_sample(self.policy_x, self.NUM_COORDS_X)[0, :]
         # self.y_sample = self.categorical_sample(self.policy_y, self.NUM_COORDS_Y)[0, :]
 
 
-        self.policy_x_select_point = slim.fully_connected(slim.fully_connected(hidden_out, 10,
-                                                                               activation_fn=LeakyReLU(),
-                                                                               weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
+        self.policy_x_select_point = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                               activation_fn=LeakyReLU()),
                                                           1764,
                                                           activation_fn=None,
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                                          biases_initializer=None)
+                                                          )
 
-        self.policy_x_spawningPool = slim.fully_connected(slim.fully_connected(hidden_out, 10,
-                                                                               activation_fn=LeakyReLU(),
-                                                                               weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
-                                                          1764,
-                                                          activation_fn=None,
-                                                          weights_initializer=normalized_columns_initializer(0.01),
-                                                          biases_initializer=None)
-
-        self.policy_x_spineCrawler = slim.fully_connected(slim.fully_connected(hidden_out, 10,
-                                                                               activation_fn=LeakyReLU(),
-                                                                               weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
+        self.policy_x_spawningPool = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                               activation_fn=LeakyReLU()),
                                                           1764,
                                                           activation_fn=None,
                                                           weights_initializer=normalized_columns_initializer(0.01),
                                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                                          biases_initializer=None)
+                                                          )
+
+        self.policy_x_spineCrawler = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                               activation_fn=LeakyReLU()),
+                                                          1764,
+                                                          activation_fn=None,
+                                                          weights_initializer=normalized_columns_initializer(0.01),
+                                                          weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
+                                                          )
 
 
-        self.policy_x_Gather = slim.fully_connected(slim.fully_connected(hidden_out, 10,
-                                                                         activation_fn=LeakyReLU(),
-                                                                         weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
+        self.policy_x_Gather = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                         activation_fn=LeakyReLU()),
                                                     1764,
                                                     activation_fn=None,
                                                     weights_initializer=normalized_columns_initializer(0.01),
                                                     weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                                    biases_initializer=None)
+                                                    )
 
-        self.policy_x_extractor = slim.fully_connected(slim.fully_connected(hidden_out, 10,
-                                                                         activation_fn=LeakyReLU(),
-                                                                         weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY)),
+        self.policy_x_extractor = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                         activation_fn=LeakyReLU()),
                                                        1764,
                                                     activation_fn=None,
                                                     weights_initializer=normalized_columns_initializer(0.01),
                                                     weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                                    biases_initializer=None)
+                                                    )
 
-        self.value = slim.fully_connected(hidden_out, 1,
+        self.value = slim.fully_connected(slim.fully_connected(self.get_network(), 100,
+                                                                         activation_fn=LeakyReLU()),
+                                          1,
                                           activation_fn=None,
                                           weights_initializer=normalized_columns_initializer(1.0),
-                                          biases_initializer=None)
+                                          )
+
+    def get_network(self):
+        type_flatten_value = self.get_flatten_conv(self.inputs_unit_type)
+        workers_flatten_value = self.get_flatten_conv(self.inputs_workers)
+        flatten_value = tf.concat([type_flatten_value, self.input_player, workers_flatten_value], axis=1)
+        value_hidden1 = slim.fully_connected(flatten_value, 10, activation_fn=LeakyReLU())
+        value_hidden2 = slim.fully_connected(value_hidden1, 10, activation_fn=LeakyReLU())
+        value_hidden2 = tf.nn.dropout(value_hidden2, .5)
+        return value_hidden2
 
     def _build_graph(self):
         self.a_policy_target =  tf.placeholder(tf.float32, shape=(None, self.NUM_ACTIONS), name="a_policy_target")
@@ -175,8 +177,10 @@ class Network:
 
         self.action_weight = tf.placeholder(tf.float32, 1)
         self.value_weight = tf.placeholder(tf.float32, 1)
-        self.unknown_weights = tf.placeholder(tf.float32, shape=(1, None))
+        self.unknown_weights = tf.placeholder(tf.float32, shape=(None))
         self.unknown_weights = tf.Print(self.unknown_weights, [self.unknown_weights, tf.shape(self.unknown_weights)], "self.unknown_weights: ")
+        self.future_v = tf.placeholder(tf.float32, shape=(None, 1),
+                                  name="future_v")
 
         self.first_v_loss = tf.placeholder(tf.float32, 1)
         self.first_a_loss = tf.placeholder(tf.float32, 12)
@@ -190,11 +194,13 @@ class Network:
         self.first_x_spawn_loss = tf.Print(self.first_x_spawn_loss, [self.first_x_spawn_loss, tf.shape(self.first_x_spawn_loss)], "self.first_x_spawn_loss: ")
         self.first_x_spine_loss = tf.Print(self.first_x_spine_loss, [self.first_x_spine_loss, tf.shape(self.first_x_spine_loss)], "self.first_x_spine_loss: ")
 
-        advantage = (self.value - self.r_t) * 100
+        advantage = (self.future_v - self.value) * 100
         advantage = tf.squeeze(advantage) #+ 1 * tf.sign(advantage)
         advantage = advantage + .000 * tf.sign(advantage)
         #advantage = tf.square(advantage) * tf.sign(advantage)
-        advantage = tf.Print(advantage, [advantage, tf.shape(advantage)], "advantage: ")
+        #advantage = tf.nn.softmax(tf.abs(advantage)) * tf.sign(advantage) * 100
+
+        advantage = tf.Print(advantage, [advantage, tf.shape(advantage), tf.reduce_min(advantage), tf.reduce_max(advantage)], "advantage: ")
 
         a_log_soft = tf.nn.log_softmax(self.policy)
         a_log_soft = tf.Print(a_log_soft, [a_log_soft, tf.shape(a_log_soft)], "a_log_soft: ")
@@ -218,14 +224,20 @@ class Network:
         # with g.gradient_override_map({"Identity": "CustomGrad5"}):
         a_loss_policy = a_log_prob * tf.stop_gradient(advantage) # maximize policy
         target_error =  tf.square(
-            self.policy - tf.stop_gradient(1 *  self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
-        target_error = tf.Print(target_error, [target_error, tf.shape(target_error)], "target_error: ")
+            self.policy - tf.stop_gradient(1 *  self.a_t * tf.expand_dims(tf.stop_gradient(tf.sign(advantage)), -1)))
+        target_error = tf.stop_gradient(tf.transpose(tf.abs([advantage]))) * target_error * self.a_t
+
+        target_error = tf.Print(target_error, [target_error, tf.shape(target_error), tf.reduce_min(target_error), tf.reduce_max(target_error)], "target_error: ")
+
 
         self.target_loss = tf.reduce_mean(target_error * self.a_t, axis=0)
         self.target_loss = tf.Print(self.target_loss, [self.target_loss, tf.shape(self.target_loss)], "self.target_loss: ")
 
-        self.a_loss_policy = tf.reduce_mean(tf.stop_gradient(tf.transpose(tf.abs([advantage]))) * target_error * self.a_t, axis=0) * 1000
+        self.a_loss_policy = tf.reduce_mean(target_error, axis=1) * 1000
 
+        #loss = tf.reduce_mean(
+        #    tf.square(policy - (1 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
+        #    * t, axis=1)
 
         a_policy_entropy = tf.reduce_mean(tf.reduce_mean(np.square(self.policy))) * 0.0001
         a_policy_entropy = tf.Print(a_policy_entropy, [a_policy_entropy, tf.shape(a_policy_entropy)], "a_policy_entropy: ")
@@ -249,10 +261,10 @@ class Network:
         # y_entropy =  tf.reduce_sum(self.policy_y * tf.log(self.policy_y + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
 
 
-        self.v_loss = loss_value
+        self.v_loss = tf.squeeze(loss_value)# * tf.squeeze(self.unknown_weights)
         self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
-
-        optimizer = tf.train.AdamOptimizer(1e-5)
+# 1.032e+00 -9.617e-01
+        optimizer = tf.train.AdamOptimizer(1e-6)
         #optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
         #gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
@@ -298,13 +310,22 @@ class Network:
         final_gather_loss = tf.reduce_mean(self.x_loss_Gather) / tf.stop_gradient(tf.reduce_mean((self.x_loss_Gather) + 0.00000001))
         final_gather_loss = tf.Print(final_gather_loss, [final_gather_loss, tf.shape(final_gather_loss)], "final_gather_loss")
 
-        positive_loss =  \
-            tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_select_point, axis=1) * self.unknown_weights) \
-            + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_spawningPool, axis=1) * self.unknown_weights) \
-            + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_spineCrawler, axis=1) * self.unknown_weights) \
-            + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_Gather, axis=1) * self.unknown_weights) \
-            + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_extractor, axis=1) * self.unknown_weights)
-        positive_loss = 0.001 * (positive_loss)
+        #positive_loss =  \
+        #    tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_select_point, axis=1) * self.unknown_weights) \
+        #    + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_spawningPool, axis=1) * self.unknown_weights) \
+        #    + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_spineCrawler, axis=1) * self.unknown_weights) \
+        #    + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_Gather, axis=1) * self.unknown_weights) \
+        #    + tf.reduce_mean(tf.reduce_mean(1 - self.policy_x_extractor, axis=1) * self.unknown_weights)
+        #positive_loss = 0.000000 * (positive_loss)
+        #positive_loss = tf.Print(positive_loss, [positive_loss, tf.shape(positive_loss)], "positive_loss")
+
+        positive_loss = \
+            tf.reduce_mean(tf.reduce_mean(tf.abs(self.policy_x_select_point))) \
+            + tf.reduce_mean(tf.reduce_mean(tf.abs(self.policy_x_spawningPool))) \
+            + tf.reduce_mean(tf.reduce_mean(tf.abs(self.policy_x_spineCrawler))) \
+            + tf.reduce_mean(tf.reduce_mean(tf.abs(self.policy_x_Gather))) \
+            + tf.reduce_mean(tf.reduce_mean(tf.abs(self.policy_x_extractor)))
+        positive_loss = 10 * positive_loss
         positive_loss = tf.Print(positive_loss, [positive_loss, tf.shape(positive_loss)], "positive_loss")
 
         self.total_loss = final_v_loss + \
@@ -313,11 +334,18 @@ class Network:
                           final_spawn_loss + \
                           final_spine_loss  + \
                           final_extractor_loss  + \
-                          final_gather_loss + \
-             (positive_loss)
+                          final_gather_loss #+ \
+             #(positive_loss)
              
-        self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss) #- tf.reduce_mean(tf.reduce_mean(self.policy_x_spineCrawler)/10000)
-                                           )
+        self.minimize_value = optimizer.minimize(self.v_loss)
+        self.minimize_a = optimizer.minimize( tf.reduce_mean(self.a_loss_policy) + 0.1*tf.reduce_sum(tf.abs(self.a_loss_policy)))
+        self.minimize_select = optimizer.minimize(tf.reduce_mean(self.x_loss_select_point) + 0.0001*tf.reduce_sum(tf.abs(self.x_loss_select_point)))
+        self.minimize_spawn = optimizer.minimize(tf.reduce_mean(self.x_loss_spawningPool) + 0.0001*tf.reduce_sum(tf.abs(self.x_loss_spawningPool)))
+        self.minimize_spine = optimizer.minimize(tf.reduce_mean(self.x_loss_spineCrawler) + 0.0001*tf.reduce_sum(tf.abs(self.x_loss_spineCrawler)))
+        self.minimize_extract = optimizer.minimize(tf.reduce_mean(self.x_loss_extractor) + 0.0001*tf.reduce_sum(tf.abs(self.policy_x_extractor)))
+        self.minimize_gather = optimizer.minimize(tf.reduce_mean(self.x_loss_Gather) + 0.0001*tf.reduce_sum(tf.abs(self.policy_x_Gather)))
+
+        #self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss))
         #gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
 
         #self.minimize = optimizer.apply_gradients(zip(gradients, variables))
@@ -355,35 +383,27 @@ class Network:
         # self.minimize = v_optimizer.minimize(self.v_loss)
 
     def get_loss_one(self, advantage, policy, t):
-        #a_log_prob = -tf.reduce_sum(t * tf.stop_gradient(tf.sign(policy)) * policy/tf.stop_gradient(policy), axis=1)
-        a_log_soft = tf.nn.log_softmax(policy)
-        a_log_prob = -tf.reduce_sum(a_log_soft * t, axis=1)
-
-        a_loss_policy = a_log_prob * tf.stop_gradient(advantage)
-        #entropy
         prob_tf = tf.nn.softmax(policy)
         mean_prob = tf.reduce_mean(prob_tf, axis=0)
         mean_prob = tf.Print(mean_prob, [mean_prob, tf.shape(mean_prob)], "mean_prob: ")
 
-        a_entropy = - tf.reduce_mean(mean_prob * tf.log(mean_prob))
-        value_regulizer = tf.reduce_mean(tf.reduce_mean(np.square(policy), axis=1)) * 0.000
 
         t_count = tf.stop_gradient(1 + tf.reduce_sum(t))
         t_count = tf.Print(t_count, [t_count, tf.shape(t_count)], "t_count: ")
 
         loss = tf.reduce_mean(
-            tf.square(policy - (1 * t * tf.expand_dims(tf.stop_gradient(tf.sign(-advantage)), -1)))
+            tf.square(policy - (1 * t * tf.expand_dims(tf.stop_gradient(tf.sign(advantage)), -1)))
             * t, axis=1)
         p_max = tf.argmax(policy, axis=1)
         t_max = tf.argmax(t, axis=1)
-        positive = advantage > 1
+        positive = advantage > 0
         actions_of_choose = tf.not_equal(p_max, t_max)
         bit_loss = tf.stop_gradient(tf.logical_or(tf.logical_and(actions_of_choose, tf.logical_not(positive)),
                                  tf.logical_and(tf.logical_not(actions_of_choose), positive)));
 
         bit_loss = tf.Print(bit_loss, [bit_loss, tf.shape(t_count)], "bit_loss: ")
-
-        return loss  * (tf.cast(bit_loss, dtype=tf.float32) + 0.1) * self.unknown_weights #+ self.unknown_weights/100000
+        # use estimated value
+        return loss #* self.unknown_weights #+ self.unknown_weights/100000
 
         #return -tf.reduce_mean(a_loss_policy) + value_regulizer
 
@@ -405,23 +425,40 @@ class Network:
         value = tf.squeeze(tf.multinomial(self.weights, 1), [1])
         return tf.one_hot(value, d)
 
-    def train(self, a, r, v, v_toggle, s, unknown_weights):
-
-        _, v_loss, total_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, x_loss_gather, x_loss_extractor, reduced_adv = self.session.run(
-            [self.minimize, self.v_loss, self.total_loss, self.a_loss_policy, self.x_loss_select_point, self.x_loss_spawningPool, self.x_loss_spineCrawler, self.x_loss_Gather, self.x_loss_extractor, self.reduced_adv],
+    def train(self, data, future_v):
+        #a[0],a[1],a[2],a[3],a[4],a[5], r, s[0],s[1],s[2], v
+        _,_,_,_,_,_,_, v_loss, total_loss, a_loss, x_loss, x_loss_spawning, x_loss_spine, x_loss_gather, x_loss_extractor, reduced_adv = self.session.run(
+            [
+        self.minimize_value,
+        self.minimize_a ,
+        self.minimize_select,
+        self.minimize_spawn,
+        self.minimize_spine,
+        self.minimize_extract,
+        self.minimize_gather,
+             self.v_loss,
+             self.total_loss,
+             self.a_loss_policy,
+             self.x_loss_select_point,
+             self.x_loss_spawningPool,
+             self.x_loss_spineCrawler,
+             self.x_loss_Gather,
+             self.x_loss_extractor,
+             self.reduced_adv],
             feed_dict={
-                       self.inputs_unit_type: s[0],
-                       self.inputs_workers: s[2],
-                       self.input_player: s[1],
-                       self.a_t: a[0],
-                       self.x_t_select_point: a[1],
-                       self.x_t_spawningPool: a[2],
-                       self.x_t_spineCrawler: a[3],
-                       self.x_t_Gather: a[4],
-                       self.x_t_extractor: a[5],
-                       self.r_t: r,
-                       self.v_t:v,
-                       self.unknown_weights: unknown_weights
+                       self.inputs_unit_type: data[7],
+                       self.input_player: data[8],
+                       self.inputs_workers: data[9],
+                       self.a_t: data[0],
+                       self.x_t_select_point: data[1],
+                       self.x_t_spawningPool: data[2],
+                       self.x_t_spineCrawler: data[3],
+                       self.x_t_Gather: data[4],
+                       self.x_t_extractor: data[5],
+                       self.r_t: data[6],
+                       self.v_t:data[10],
+                       self.unknown_weights:data[11],
+                       self.future_v:future_v
                        #self.v_toggle: v_toggle,
                        #self.state_in[0]: rnn_state[0],
                        #self.state_in[1]: rnn_state[1],
@@ -469,12 +506,30 @@ class Network:
 
 
     def save(self):
-        self.saver.save(self.session, 'models/model-' + str(1) + '.cptk')
+        self.saver.save(self.session, 'brain/models/model-' + str(1) + '.cptk')
         pass
 
     def restore(self):
-        self.saver.restore(self.session, 'models/model-' + str(1) + '.cptk')
+        self.saver.restore(self.session, 'brain/models/model-' + str(1) + '.cptk')
         pass
+
+
+    def predict_value(self, available_actions, s, batch_rnn_state):
+        with self.default_graph.as_default():
+            v = \
+                self.session.run([
+                                  self.value
+                                 ],
+                                 feed_dict={
+                                     self.available_actions: available_actions,
+                                     self.inputs_unit_type: s[0],
+                                     self.inputs_workers: s[2],
+                                     self.input_player: s[1]
+                                     #self.state_in[0]: batch_rnn_state[0],
+                                     #self.state_in[1]: batch_rnn_state[1]
+                                 })
+            return v[0]
+
 
     def predict(self, available_actions, s, batch_rnn_state):
         with self.default_graph.as_default():
@@ -493,9 +548,10 @@ class Network:
                                      self.available_actions: available_actions,
                                      self.inputs_unit_type: s[0],
                                      self.inputs_workers: s[2],
-                                     self.input_player: s[1],
-                                     self.state_in[0]: batch_rnn_state[0],
-                                     self.state_in[1]: batch_rnn_state[1]})
+                                     self.input_player: s[1]
+                                     #self.state_in[0]: batch_rnn_state[0],
+                                     #self.state_in[1]: batch_rnn_state[1]
+                                 })
 
             r_value = random.random()
             if r_value > 0.99:
@@ -529,43 +585,37 @@ class Network:
         policy = policy * available_actions
         if sum(policy) == 0:
             return 0
-        policy = normalize(policy[:, np.newaxis], axis=0).ravel()
-        multinomial = np.random.multinomial(n, policy / sum(policy) - .000000001, size=1)
+        #policy = normalize(policy[:, np.newaxis], axis=0).ravel()
+        return np.argmax(policy)
 
-        return np.argmax(multinomial)
+        #return np.argmax(multinomial)
 
     def get_flatten_conv(self, image_unit_type):
         # image_unit_type = tf.Print(image_unit_type, [image_unit_type], "get_flatten_conv: ")
 
         type_conv1 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=image_unit_type, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
         #type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
 
         type_conv2 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv1, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
 
         type_conv3 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv2, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
 
         type_conv4 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv3, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
 
         type_conv5 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv4, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
 
         type_conv6 = slim.conv2d(activation_fn=LeakyReLU(),
                                  inputs=type_conv5, num_outputs=128,
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  kernel_size=4, stride=2, padding='SAME')
 
         # type_conv2 = tf.Print(type_conv2, [type_conv2], "type_conv2: ")

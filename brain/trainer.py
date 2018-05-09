@@ -7,13 +7,16 @@ import redis
 import numpy as np
 from Actions import get_action_map
 from Network import Network
+from heapq import nlargest
+
+from brain.TensorlowDataHelper import from_indexable
 from redis_int.RedisUtil import recv_s, send_s
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 RUN_TIME = 300000
-OPTIMIZERS = 8
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 1.0
@@ -25,6 +28,7 @@ EPS_START = .5
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
+TRAINING_SIZE = 100
 
 LOSS_V = .5  # v loss coefficient
 LOSS_ENTROPY = .01  # entropy coefficient
@@ -46,120 +50,75 @@ class Brain:
         self.redis_local = redis.StrictRedis(host='localhost', port=6379, db=0)
         self.lastTime = time.clock()
         np.set_printoptions(threshold=12)
-
+        self.features_mean_images = {}
     def optimize(self):
         #if len(self.train_queue[0]) < MIN_BATCH:
         #with self.read_lock:
-        train_queue = [[], [], [], [], [], [], [], []]
-        print("starting optimize")
-        for _ in range(1):
+        self.import_new_data()
 
-            samples = recv_s(self.r, key="gamesample", count=-1)
-            RNN_USED = False
-            for sample in samples:
-                prev_rnn1 = [np.zeros((300), np.float32)]
-                prev_rnn2 = [np.zeros((300), np.float32)]
-                for e in sample:
-                    if random.random() > 1:
-                        continue
-                    if RNN_USED:
-                        out = self.network.predict([1] * 11, [[e[0][0]], [e[0][1]], [e[0][2]]],
-                                         [prev_rnn1, prev_rnn2])
-                        e[5][0] = np.copy(prev_rnn1[0])
-                        e[5][1] = np.copy(prev_rnn2[0])
-                    self.train_push(train_queue, *e)
-                    if RNN_USED:
-                        prev_rnn1 = [out[10][0][0]]
-                        prev_rnn2 = [out[10][1][0]]
-        if len(train_queue[0]) > 0:
-            s, a, r, s_, s_mask, rnn_state, v, a_policy = train_queue
+        class SceneGenerator(object):
+            def __init__(self, trainer ):
+                self.trainer = trainer
 
-            print("prepping training data")
-            s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
-            # s = np.stack(s, axis=1)
-            a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
-                 self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5)]
-            r = np.vstack(r)
-            v = np.vstack(v)
-            a_policy = np.vstack(a_policy)
-            # s_ = np.stack(s_, axis=1)
-            s_ = [self.to_array(s_, 0), self.to_array(s_, 1)]
+            def __len__(self):
+                return 1200
 
-            rnn_state = [self.to_array(rnn_state, 0), self.to_array(rnn_state, 1)]
+            def __getitem__(self, item):
+                a, r, s, v, total_weights, s_f = self.trainer.get_data()
+                return a[0], a[1], a[2], a[3], a[4], a[5], r, s[0], s[1], s[2], v, total_weights, s_f[0],s_f[1],s_f[2]
+        import tensorflow as tf
+        ds = from_indexable(SceneGenerator(self),
+                            output_types=(tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16),
+            output_shapes=(
+                (TRAINING_SIZE, 12), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764),
+                (TRAINING_SIZE,1),
+                (TRAINING_SIZE, 84, 84), (TRAINING_SIZE, 18), (TRAINING_SIZE, 84, 84),
+                (TRAINING_SIZE,1),
+                (TRAINING_SIZE, 1),
+                (TRAINING_SIZE, 84, 84),
+                (TRAINING_SIZE, 18),
+                (TRAINING_SIZE, 84, 84)
+            ))
 
-            if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
-            class_weights = np.square(max(np.sum(a[0]==1, axis=0) ) / (np.sum(a[0]==1, axis=0) + 0.00001))
-            class_weights = np.clip(class_weights, 1, 10)
-            # _, _, _, v, _ = self.predict(s_, rnn_state)
-            # r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
-            r = r  # set v to 0 where s_ is terminal state
-            print("a sum: ", np.sum(a[0] == 1, axis=0))
-            print("advantage sum: ", np.sum((r - v) * a[0], axis=0))
-            print("rnn : ", rnn_state)
-        if True:
-            training_size = 8000
-            for i in range(len(train_queue[0])):
-                send_s(self.r, [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], r[i], v[i]], key="samplecache")
-
-            s = [np.zeros(shape=(training_size, 84, 84), dtype=float), np.zeros(shape=(training_size, 17), dtype=float), np.zeros(shape=(training_size, 84, 84), dtype=float)]
-            a = [np.zeros(shape=(training_size, 11), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764), dtype=float), np.zeros(shape=(training_size, 1764),  dtype=float), np.zeros(shape=(training_size, 1764),  dtype=float)]
-            r = np.zeros(shape=(training_size,1), dtype=float)
-            v = np.zeros(shape=(training_size,1), dtype=float)
-
-            cached_samples = recv_s(self.redis_local, key="samplecache", count=training_size, poplimit=9999999999)
-            _ = recv_s(self.r, key="samplecache", poplimit=100000)
-
-            s[0] = self.to_array(cached_samples,0)
-            s[1] = self.to_array(cached_samples,1)
-            s[2] = self.to_array(cached_samples,2)
-
-            a[0] = self.to_array(cached_samples,3)
-            a[1] = self.to_array(cached_samples,4)
-            a[2] = self.to_array(cached_samples,5)
-            a[3] = self.to_array(cached_samples,6)
-            a[4] = self.to_array(cached_samples,7)
-            a[5] = self.to_array(cached_samples,8)
-
-            r = self.to_array(cached_samples,9)
-            v = self.to_array(cached_samples,10)
-
-
-
-        if self.first_run:
-            print("first run")
-            self.first_run = False
-
-        images = s[2]
-        mean_images = np.mean(images, axis=0)
-        diff_images = np.mean(np.mean(abs(mean_images - images), axis=1), axis=1)
-        weights = [np.square(diff_images)]
-        weights = (weights - np.min(weights)) / (np.max(weights) - np.min(weights))
-
+        #self.get_data()
+        it = ds.make_one_shot_iterator()
+        next_element = it.get_next()
         with self.gpu_lock:
+
+
             print("getting first losses")
 
-            #losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
-            #print("first losses", losses)
+            with tf.Session() as sess:
+                datas = []
+                for _ in range(1200):
+                    data = sess.run(next_element)
+                    datas.append(data)
+                    if len(datas) > 1:
+                        print("len datas: ", len(datas))
+                        del datas[0]
+                    for d in datas:
 
-            for _ in range(10):
-                total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(a, r, v, np.zeros(shape=(len(v), 1)), s, weights)
-                print("total_loss ", total_loss)
-                print("total_loss mean ", np.mean(total_loss))
-                print("v_loss ", np.mean(v_loss))
-                print("a_loss_policy ", np.mean(a_loss))
-                print("x_loss_policy ", np.mean(x_loss))
-                print("x_loss_spawn ", np.mean(x_loss_spawn))
-                print("x_loss_spine ", np.mean(x_loss_spine))
-                print("x_loss_gather ", np.mean(x_loss_gather))
-                print("x_loss_extractor ", np.mean(x_loss_extractor))
+                        v = self.network.predict_value([1] * 12, [d[12], d[13], d[14]], [])
+                        total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(d, v)
+                        print("total_loss ", total_loss)
+                        print("total_loss mean ", np.mean(total_loss))
+                        print("v_loss ", np.mean(v_loss))
+                        print("a_loss_policy ", np.mean(a_loss))
+                        print("x_loss_policy ", np.mean(x_loss))
+                        print("x_loss_spawn ", np.mean(x_loss_spawn))
+                        print("x_loss_spine ", np.mean(x_loss_spine))
+                        print("x_loss_gather ", np.mean(x_loss_gather))
+                        print("x_loss_extractor ", np.mean(x_loss_extractor))
 
 
-                #losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
-                #print("first_v_loss", np.mean(losses[0]))
-                #print("first_a_loss", np.mean(losses[1]))
-                #print("first_x_select_loss", np.mean(losses[2]))
-                #print("first_x_spawn_loss", np.mean(losses[3]))
-                #print("first_x_spine_loss", np.mean(losses[4]))
+
+
+                    #losses = self.network.get_losses(a, r, v, np.zeros(shape=(len(v), 1)), s, [], [])
+                    #print("first_v_loss", np.mean(losses[0]))
+                    #print("first_a_loss", np.mean(losses[1]))
+                    #print("first_x_select_loss", np.mean(losses[2]))
+                    #print("first_x_spawn_loss", np.mean(losses[3]))
+                    #print("first_x_spine_loss", np.mean(losses[4]))
         print("training done")
         if((time.clock() - self.lastTime) > 30):
             print("saving model")
@@ -175,8 +134,139 @@ class Brain:
 
             # print "optimized done"
 
+    def import_new_data(self):
+        train_queue = [[], [], [], [], [], [], [], [], []]
+        print("starting optimize")
+        for _ in range(1):
+
+            samples = recv_s(self.r, key="gamesample", count=-1)
+            for sample in samples:
+                for e in sample:
+                    self.train_push(train_queue, *e)
+
+        if len(train_queue[0]) > 0:
+            self.cache_training_data(train_queue)
+
+    def get_data(self):
+        s = [np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float), np.zeros(shape=(TRAINING_SIZE, 17), dtype=float),
+             np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float)]
+        s_f = [np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float), np.zeros(shape=(TRAINING_SIZE, 17), dtype=float),
+             np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float)]
+        a = [np.zeros(shape=(TRAINING_SIZE, 11), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
+             np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
+             np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float)]
+        cached_samples = recv_s(self.r, key="samplecache", count=TRAINING_SIZE, poplimit=9999999999)
+        _ = recv_s(self.r, key="samplecache", poplimit=100000)
+        s[0] = np.array(self.to_array(cached_samples, 0) == 342, dtype="float16")
+        s[1] = self.to_array(cached_samples, 1)
+        s[2] = self.to_array(cached_samples, 2)
+        a[0] = self.to_array(cached_samples, 3)
+        a[1] = self.to_array(cached_samples, 4)
+        a[2] = self.to_array(cached_samples, 5)
+        a[3] = self.to_array(cached_samples, 6)
+        a[4] = self.to_array(cached_samples, 7)
+        a[5] = self.to_array(cached_samples, 8)
+        r = self.to_array(cached_samples, 9)
+        v = self.to_array(cached_samples, 10)
+
+        s_f[0] = np.array(self.to_array(cached_samples, 12) == 342, dtype="float16")
+        s_f[1] = self.to_array(cached_samples, 13)
+        s_f[2] = self.to_array(cached_samples, 14)
+
+        # next_s = self.to_array(cached_samples,11)
+        next_s = np.zeros(shape=(TRAINING_SIZE, 2, 84, 84), dtype="int16")
+        for i in range(len(cached_samples)):
+            e = cached_samples[i]
+            sample = np.zeros(shape=(2, 84, 84))
+            sample[:min(e[11].shape[0], 2), :e[11].shape[1]] = e[11][:min(e[11].shape[0], 2)]
+            next_s[i] = sample
+        if self.first_run:
+            print("first run")
+            self.first_run = False
+        unit_types = set()
+        for state_s in next_s:
+            for e in state_s:
+                for u in np.unique(e):
+                    #print("u: ", u)
+                    continue
+                    if u == 0:
+                        continue
+                    unit_types.add(u)
+        feature_images = next_s
+        total_weights = np.zeros(shape=(len(unit_types), len(feature_images)), dtype="float16")
+        unit_types = list(unit_types)
+        print("creating state weights")
+        # tmp_compared = np.zeros(shape=next_s.shape)
+        for u_index in range(len(unit_types)):
+            feature = unit_types[u_index]
+            print(feature)
+            if feature == 0:
+                continue
+            if feature not in self.features_mean_images or random.random() > 0.9:
+                print("feature not found: ", feature)
+                mean_images = []
+                for states in next_s:
+                    for future_state in states:
+                        bit_feature_image = future_state == feature
+                        mean_images.append(bit_feature_image)
+                if feature not in self.features_mean_images:
+                    self.features_mean_images[feature] = np.mean(mean_images, axis=0)
+                else:
+                    self.features_mean_images[feature] = 0.9 * self.features_mean_images[feature] + 0.1 * np.mean(
+                        mean_images, axis=0)
+            total_weights[u_index] = np.max(
+                np.mean(np.mean(np.square((self.features_mean_images[feature] - np.equal(next_s, feature))), axis=2),
+                        axis=2), axis=1)
+        print("done creating state weights")
+        normalized_weights = self.get_weight(total_weights)
+        total_weights = normalized_weights
+        print("max extra points: ", nlargest(10, total_weights))
+        r = r.squeeze() #+.01 *total_weights
+        r = np.expand_dims(r, axis=1)
+        return a, r, s, v, total_weights, s_f
+
+    def get_weight(self, total_weights):
+        if len(total_weights) == 0:
+            return np.zeros(total_weights.shape[1], dtype="float16")
+        normalized_weights = []
+        for e in total_weights:
+            normalized_weights.append((e - np.min(e)) / (np.max(e) - np.min(e) + 0.000001))
+        normalized_weights = np.square(np.array(normalized_weights))
+        normalized_weights = np.max(normalized_weights, axis=0)
+        normalized_weights = ((normalized_weights - np.min(normalized_weights)) / (
+                np.max(normalized_weights) - np.min(normalized_weights)))
+        return normalized_weights
+
+    def cache_training_data(self, train_queue):
+        s, a, r, s_, s_mask, rnn_state, v, a_policy, next_s = train_queue
+        print("prepping training data")
+        s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
+        # next_s= map(lambda state: np.array(list(np.array(state)[:, 0]), dtype=np.float32), next_s)
+        next_state0 = []
+        next_state1 = []
+        next_state2 = []
+        next_state = []
+        for e in next_s:
+            next_state.append(self.to_array(e, 0))
+            next_state0.append(self.to_array(e, 0))
+            next_state1.append(self.to_array(e, 1))
+            next_state2.append(self.to_array(e, 2))
+
+        next_s = next_state
+        a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
+             self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5)]
+        r = np.vstack(r)
+        v = np.vstack(v)
+        for i in range(len(train_queue[0])):
+            offset = min(len(next_state0[i])-1,1)
+            #if 88.0 in s[0][i]:
+            #    print("found 88")
+            send_s(self.r,
+                   [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], r[i], v[i],
+                    next_s[i], next_state0[i][offset], next_state1[i][offset], next_state2[i][offset]], key="samplecache")
+
     def to_array(self, s, idx):
-        return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
+        return np.array(list(np.array(s)[:, idx]), dtype=np.float16)
 
     def save(self):
         self.network.save()
@@ -184,7 +274,7 @@ class Brain:
     def restore(self):
         self.network.restore()
 
-    def train_push(self, train_queue, s, a, r, v, s_, rnn_state, a_policy):
+    def train_push(self, train_queue, s, a, r, v, s_, rnn_state, a_policy, next_s):
         #with self.lock_queue:
             train_queue[0].append(np.copy(s))
             train_queue[1].append(np.copy(a))
@@ -200,6 +290,7 @@ class Brain:
             train_queue[5].append(np.copy(rnn_state))
             train_queue[6].append(np.copy(v))
             train_queue[7].append(np.copy(a_policy))
+            train_queue[8].append(np.copy(next_s))
 
     def push_great_game(self, s, a, r, v, s_, rnn_state):
         with self.lock_queue:
@@ -258,8 +349,8 @@ brain = Brain()  # brain is global in A3C
 
 opts = [Optimizer() for _ in range(OPTIMIZERS)]
 
-time.sleep(1)
-
+time.sleep(10000)
+print("Starting optimizers")
 for o in opts:
     o.start()
     time.sleep(5)

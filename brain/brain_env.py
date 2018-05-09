@@ -111,8 +111,8 @@ class Agent:
 
     def reset(self):
         # pass
-        if random.random() > 0.8:
-            self.epsilon = random.random()/2
+        if random.random() > 0.5:
+            self.epsilon = random.random()
         else:
             self.epsilon = 0.0
         self.rnn_state = self.get_lstm_init_state()
@@ -135,7 +135,7 @@ class Agent:
         frames = frames + 1
 
         a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, rnn_state, a_policy =\
-            brain.predict(available_actions, [[s[0]], [s[1]], [s[2]]],
+            brain.predict(available_actions, [[np.array(s[0] == 342, dtype="float32")], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
 
         a = a[0]
@@ -148,6 +148,7 @@ class Agent:
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
+            a = weighted_random_index(available_actions * np.array([1,1,1,1,1,1,1,1,1,1,1,1]))
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
                 x_select_point = np.random.randint(0, 1764)
@@ -197,27 +198,32 @@ class Agent:
             while len(self.memory) > 0:
                 n = len(self.memory)
                 s, a, r, s_, rnn_sate, a_policy = self.get_sample(self.memory, n)
+                #if prev_s is None:
+                #    prev_s.append(s)
                 if r < 0:
                     print("forgetting this game ", r)
                 elif r > 99:
                     raise Exception('Should not happen')
                     brain.push_great_game(s, a, r, v, s_, rnn_sate)
                 else:
-                    if s[1][6 + np.argmax(a[0])] == 0:
-                        print(s[1])
-                        print(a)
-                        brain.train_push(s, a, r*0.99, s_, rnn_sate)
-                    else:
                         #if a[1][0] == 1 or a[0][0] == 1:
                         #    send_zipped_pickle(self.r, [s, a, r *1, v, s_, rnn_sate, a_policy], key="trainingsample")
                         #brain.push_great_game(s, a, r, v, s_, rnn_sate)
-                        data = [s, a, r, v, s_, rnn_sate, a_policy]
+                        prev_s = []
+                        for i in range(len(self.memory)):
+                            #if i == 0:
+                            #    continue
+                            f_s, _, _, _, _, _ = self.memory[i]
+                            prev_s.append(f_s)
+                        if len(prev_s) == 0:
+                            data = [s, a, r, v, s_, rnn_sate, a_policy, np.array([s])]
+                        else:
+                            data = [s, a, r, v, s_, rnn_sate, a_policy, np.array(prev_s)]
                         #if a[0][0] == 1:
                         #    data = [s, a, r*0.9, v, s_, rnn_sate, a_policy]
                         #send_zipped_pickle(self.r, data, key="trainingsample")
                         game_data.append(data)
                         #brain.train_push(s, a, r, v, s_, rnn_sate)
-
                 time.sleep(0)
 
                 self.R = (self.R - self.memory[0][2]) / GAMMA
@@ -355,14 +361,14 @@ class Environment(threading.Thread):
 
 
     def get_state(self, obs):
-        return [np.array( (get_screen_unit_type(obs) == 89), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) > 0), dtype="float32" )]
+        return [np.array( (get_screen_unit_type(obs)), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) > 0), dtype="float32" )]
 
     def run(self):
         while not self.stop_signal:
             try:
                 self.agent.reset()
                 self.runEpisode()
-                if os.path.isfile("models/checkpoint"):
+                if os.path.isfile("brain/models/checkpoint"):
                     print("loading model")
                     brain.restore()
 
@@ -371,6 +377,7 @@ class Environment(threading.Thread):
                 print("got exception while working")
                 print(tb)
                 print(exp)
+
 
     def stop(self):
         self.stop_signal = True
@@ -402,9 +409,10 @@ brain = Brain()  # brain is global in A3C
 envs = [Environment() for _ in range(THREADS)]
 
 
-
+print("Starting up threads")
 for e in envs:
     e.start()
+print("Threads started, ready to receive work")
 
 time.sleep(RUN_TIME)
 
