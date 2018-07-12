@@ -47,7 +47,7 @@ class Brain:
     def __init__(self):
         self.network = Network()
         self.first_run = True
-        self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+        self.r = redis.StrictRedis(host='in.space', port=6379, db=0)
 
     def to_array(self, s, idx):
         return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
@@ -107,12 +107,12 @@ class Agent:
         self.memory = []  # used for n_step return
         self.R = 0.
         self.rnn_state = self.get_lstm_init_state()
-        self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+        self.r = redis.StrictRedis(host='in.space', port=6379, db=0)
 
     def reset(self):
         # pass
-        if random.random() > 0.5:
-            self.epsilon = random.random()
+        if random.random() > 0.1:
+            self.epsilon = random.uniform(0.0, 0.6)
         else:
             self.epsilon = 0.0
         self.rnn_state = self.get_lstm_init_state()
@@ -134,21 +134,23 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, rnn_state, a_policy =\
+        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, v, rnn_state, a_policy =\
             brain.predict(available_actions, [[np.array(s[0] == 342, dtype="float32")], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
-
+        if v < 0.5:
+            print("found small v: ", v)
         a = a[0]
         x_select_point = x_select_point[0]
         x_spawningPool = x_spawningPool[0]
         x_spineCrawler = x_spineCrawler[0]
         x_Gather = x_Gather[0]
         x_extractor = x_extractor[0]
+        minimap_attack = minimap_attack[0]
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
-            a = weighted_random_index(available_actions * np.array([1,1,1,1,1,1,1,1,1,1,1,1]))
+            a = weighted_random_index(available_actions * np.array([1,1,1,1,1,1,1,1,1,1,1,1,1]))
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
                 x_select_point = np.random.randint(0, 1764)
@@ -156,8 +158,9 @@ class Agent:
                 x_spineCrawler = np.random.randint(0, 1764)
                 x_Gather = np.random.randint(0, 1764)
                 x_extractor = np.random.randint(0, 1764)
+                minimap_attack = np.random.randint(0, 1024)
 
-        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor,  v, _rnn_state, a_policy
+        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack,  v, _rnn_state, a_policy
 
     def get_sample(self, memory, n):
         s, a, _, _, rnn_sate, a_policy = memory[0]
@@ -173,6 +176,7 @@ class Agent:
         x_spineCrawler = np.zeros(1764)  # turn action into one-hot representation
         x_Gather = np.zeros(1764)  # turn action into one-hot representation
         x_extractor = np.zeros(1764)  # turn action into one-hot representation
+        minimap_attack = np.zeros(1024)  # turn action into one-hot representation
         if a[0] != -1:
             #a_cats = (np.ones(NUM_ACTIONS) * -1) /(NUM_ACTIONS - 1)
             a_cats[a[0]] = 1
@@ -186,8 +190,10 @@ class Agent:
             x_Gather[a[4]] = 1
         if a[5] != -1:
             x_extractor[a[5]] = 1
+        if a[6] != -1:
+            minimap_attack[a[6]] = 1
 
-        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather, x_extractor]), np.copy(r), s_, rnn_sate, a_policy))
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack]), np.copy(r), s_, rnn_sate, a_policy))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
@@ -229,7 +235,7 @@ class Agent:
                 self.R = (self.R - self.memory[0][2]) / GAMMA
                 self.memory.pop(0)
             if len(game_data) > 0:
-                for _ in range(10):
+                for _ in range(1):
                     send_s(self.r, game_data, key="gamesample")
             self.R = 0
 
@@ -282,7 +288,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
+            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -298,6 +304,7 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_Gather = -1
                 x_extractor = -1
+                minimap_attack = -1
                 a = -1
 
             elif a == 6:
@@ -306,6 +313,7 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_Gather = -1
                 x_extractor = -1
+                minimap_attack = -1
                 a = -1
 
             elif a == 9:
@@ -314,6 +322,7 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_Gather = -1
                 x_extractor = -1
+                minimap_attack = -1
                 a = -1
 
             elif a == 10:
@@ -322,6 +331,7 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_extractor = -1
+                minimap_attack = -1
                 a = -1
 
             elif a == 11:
@@ -330,6 +340,16 @@ class Environment(threading.Thread):
                 x_spawningPool = -1
                 x_spineCrawler = -1
                 x_Gather = -1
+                minimap_attack = -1
+                a = -1
+
+            elif a == 12:
+                _ = self.env.make_action(_a, minimap_attack, max_axis=32)
+                x_select_point = -1
+                x_spawningPool = -1
+                x_spineCrawler = -1
+                x_Gather = -1
+                x_extractor = -1
                 a = -1
 
             else:
@@ -339,6 +359,7 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_Gather = -1
                 x_extractor = -1
+                minimap_attack = -1
 
 
             done, obs, r = self.env.get_state()
@@ -350,7 +371,7 @@ class Environment(threading.Thread):
             else:
                 s_ = self.get_state(obs)
             with self.lock_queue:
-                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor], r, v, s_, rnn_state, a_policy)
+                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_

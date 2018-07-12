@@ -27,7 +27,7 @@ def py_func_decorator(output_types=None, output_shapes=None, stateful=True, name
         return call
     return decorator
 
-def from_indexable(iterator, output_types, output_shapes=None, num_parallel_calls=8, stateful=True, name=None):
+def from_indexable(iterator, output_types, output_shapes=None, num_parallel_calls=1, stateful=True, name=None):
     ds = tf.data.Dataset.range(len(iterator))
     @py_func_decorator(output_types, output_shapes, stateful=stateful, name=name)
     def index_to_entry(index):

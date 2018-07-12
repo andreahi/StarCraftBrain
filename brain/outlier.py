@@ -17,11 +17,12 @@ def to_array(s, idx):
     return np.array(list(np.array(s)[:, idx]), dtype=np.float32)
 
 
-redis_local = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+redis_local = redis.StrictRedis(host='in.space', port=6379, db=0)
 
 cached_samples = recv_s(redis_local, key="samplecache", count=5000, poplimit=9999999999)
 
 images = to_array(cached_samples, 2)
+original_images = to_array(cached_samples, 0)
 feature_images = to_array(cached_samples, 0)
 total_weights = np.zeros(len(images))
 for e in np.unique(feature_images):
@@ -35,7 +36,7 @@ for e in np.unique(feature_images):
 
 
 import matplotlib.pyplot as plt
-plt.imshow(images[np.argmax(total_weights)])
+plt.imshow(original_images[np.argmax(total_weights)] == 88)
 plt.colorbar()
 plt.show()
 

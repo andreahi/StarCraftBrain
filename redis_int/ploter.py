@@ -3,7 +3,7 @@ import redis
 
 from RedisUtil import recv_zipped_pickle
 
-r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
+r = redis.StrictRedis(host='in.space', port=6379, db=0)
 
 
 import numpy as np

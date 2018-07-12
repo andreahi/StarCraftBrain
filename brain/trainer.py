@@ -13,7 +13,7 @@ from brain.TensorlowDataHelper import from_indexable
 from redis_int.RedisUtil import recv_s, send_s
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RUN_TIME = 300000
 OPTIMIZERS = 1
@@ -28,7 +28,8 @@ EPS_START = .5
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
-TRAINING_SIZE = 100
+TRAINING_SIZE = 1000
+BATCH_COUNT = 12
 
 LOSS_V = .5  # v loss coefficient
 LOSS_ENTROPY = .01  # entropy coefficient
@@ -46,8 +47,7 @@ class Brain:
     def __init__(self):
         self.network = Network()
         self.first_run = True
-        self.r = redis.StrictRedis(host='192.168.0.25', port=6379, db=0)
-        self.redis_local = redis.StrictRedis(host='localhost', port=6379, db=0)
+        self.r = redis.StrictRedis(host='in.space', port=6379, db=0)
         self.lastTime = time.clock()
         np.set_printoptions(threshold=12)
         self.features_mean_images = {}
@@ -61,16 +61,17 @@ class Brain:
                 self.trainer = trainer
 
             def __len__(self):
-                return 1200
+                return BATCH_COUNT
 
             def __getitem__(self, item):
                 a, r, s, v, total_weights, s_f = self.trainer.get_data()
-                return a[0], a[1], a[2], a[3], a[4], a[5], r, s[0], s[1], s[2], v, total_weights, s_f[0],s_f[1],s_f[2]
+                return a[0], a[1], a[2], a[3], a[4], a[5], a[6], r, s[0], s[1], s[2], v, total_weights, s_f[0],s_f[1],s_f[2]
         import tensorflow as tf
         ds = from_indexable(SceneGenerator(self),
-                            output_types=(tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16),
+                            output_types=(tf.float16, tf.float16, tf.float16, tf.float16,  tf.float16, tf.float16, tf.float16,
+                                          tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16, tf.float16),
             output_shapes=(
-                (TRAINING_SIZE, 12), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764),
+                (TRAINING_SIZE, 12), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1764), (TRAINING_SIZE, 1024),
                 (TRAINING_SIZE,1),
                 (TRAINING_SIZE, 84, 84), (TRAINING_SIZE, 18), (TRAINING_SIZE, 84, 84),
                 (TRAINING_SIZE,1),
@@ -80,7 +81,7 @@ class Brain:
                 (TRAINING_SIZE, 84, 84)
             ))
 
-        #self.get_data()
+        self.get_data()
         it = ds.make_one_shot_iterator()
         next_element = it.get_next()
         with self.gpu_lock:
@@ -90,26 +91,27 @@ class Brain:
 
             with tf.Session() as sess:
                 datas = []
-                for _ in range(1200):
+                for _ in range(BATCH_COUNT):
                     data = sess.run(next_element)
                     datas.append(data)
                     if len(datas) > 1:
-                        print("len datas: ", len(datas))
                         del datas[0]
                     for d in datas:
 
-                        v = self.network.predict_value([1] * 12, [d[12], d[13], d[14]], [])
+                        v = self.network.predict_value([1] * 13, [d[13], d[14], d[15]], [])
+                        #map_predict_loss = self.network.train_predict_map([1] * 13, [d[13], d[14], d[15]], [])
+                        #print("map_predict_loss: ", map_predict_loss)
                         total_loss, v_loss, a_loss, x_loss, x_loss_spawn, x_loss_spine, x_loss_gather, x_loss_extractor = self.network.train(d, v)
-                        print("total_loss ", total_loss)
-                        print("total_loss mean ", np.mean(total_loss))
-                        print("v_loss ", np.mean(v_loss))
-                        print("a_loss_policy ", np.mean(a_loss))
-                        print("x_loss_policy ", np.mean(x_loss))
-                        print("x_loss_spawn ", np.mean(x_loss_spawn))
-                        print("x_loss_spine ", np.mean(x_loss_spine))
-                        print("x_loss_gather ", np.mean(x_loss_gather))
-                        print("x_loss_extractor ", np.mean(x_loss_extractor))
-
+                print("total_loss ", total_loss)
+                print("total_loss mean ", np.mean(total_loss))
+                print("v_loss ", np.mean(v_loss))
+                print("a_loss_policy ", np.mean(a_loss))
+                print("x_loss_policy ", np.mean(x_loss))
+                print("x_loss_spawn ", np.mean(x_loss_spawn))
+                print("x_loss_spine ", np.mean(x_loss_spine))
+                print("x_loss_gather ", np.mean(x_loss_gather))
+                print("x_loss_extractor ", np.mean(x_loss_extractor))
+                del datas
 
 
 
@@ -152,11 +154,12 @@ class Brain:
              np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float)]
         s_f = [np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float), np.zeros(shape=(TRAINING_SIZE, 17), dtype=float),
              np.zeros(shape=(TRAINING_SIZE, 84, 84), dtype=float)]
-        a = [np.zeros(shape=(TRAINING_SIZE, 11), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
+        a = [np.zeros(shape=(TRAINING_SIZE, 12), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
              np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
-             np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float)]
+             np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float), np.zeros(shape=(TRAINING_SIZE, 1764), dtype=float),
+             np.zeros(shape=(TRAINING_SIZE, 1024), dtype=float)]
         cached_samples = recv_s(self.r, key="samplecache", count=TRAINING_SIZE, poplimit=9999999999)
-        _ = recv_s(self.r, key="samplecache", poplimit=100000)
+        _ = recv_s(self.r, key="samplecache", poplimit=500000)
         s[0] = np.array(self.to_array(cached_samples, 0) == 342, dtype="float16")
         s[1] = self.to_array(cached_samples, 1)
         s[2] = self.to_array(cached_samples, 2)
@@ -166,19 +169,20 @@ class Brain:
         a[3] = self.to_array(cached_samples, 6)
         a[4] = self.to_array(cached_samples, 7)
         a[5] = self.to_array(cached_samples, 8)
-        r = self.to_array(cached_samples, 9)
-        v = self.to_array(cached_samples, 10)
+        a[6] = self.to_array(cached_samples, 9)
+        r = self.to_array(cached_samples, 10)
+        v = self.to_array(cached_samples, 11)
 
-        s_f[0] = np.array(self.to_array(cached_samples, 12) == 342, dtype="float16")
-        s_f[1] = self.to_array(cached_samples, 13)
-        s_f[2] = self.to_array(cached_samples, 14)
+        s_f[0] = np.array(self.to_array(cached_samples, 13) == 342, dtype="float16")
+        s_f[1] = self.to_array(cached_samples, 14)
+        s_f[2] = self.to_array(cached_samples, 15)
 
         # next_s = self.to_array(cached_samples,11)
         next_s = np.zeros(shape=(TRAINING_SIZE, 2, 84, 84), dtype="int16")
         for i in range(len(cached_samples)):
             e = cached_samples[i]
             sample = np.zeros(shape=(2, 84, 84))
-            sample[:min(e[11].shape[0], 2), :e[11].shape[1]] = e[11][:min(e[11].shape[0], 2)]
+            sample[:min(e[12].shape[0], 2), :e[12].shape[1]] = e[12][:min(e[12].shape[0], 2)]
             next_s[i] = sample
         if self.first_run:
             print("first run")
@@ -189,6 +193,8 @@ class Brain:
                 for u in np.unique(e):
                     #print("u: ", u)
                     continue
+                    #if not(u == 88 or u == 104):
+                    #    continue
                     if u == 0:
                         continue
                     unit_types.add(u)
@@ -217,11 +223,11 @@ class Brain:
             total_weights[u_index] = np.max(
                 np.mean(np.mean(np.square((self.features_mean_images[feature] - np.equal(next_s, feature))), axis=2),
                         axis=2), axis=1)
-        print("done creating state weights")
+        #print("done creating state weights")
         normalized_weights = self.get_weight(total_weights)
         total_weights = normalized_weights
         print("max extra points: ", nlargest(10, total_weights))
-        r = r.squeeze() #+.01 *total_weights
+        r = r.squeeze() + 0.1 *total_weights
         r = np.expand_dims(r, axis=1)
         return a, r, s, v, total_weights, s_f
 
@@ -254,7 +260,7 @@ class Brain:
 
         next_s = next_state
         a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
-             self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5)]
+             self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6)]
         r = np.vstack(r)
         v = np.vstack(v)
         for i in range(len(train_queue[0])):
@@ -262,7 +268,7 @@ class Brain:
             #if 88.0 in s[0][i]:
             #    print("found 88")
             send_s(self.r,
-                   [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], r[i], v[i],
+                   [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], a[6][i], r[i], v[i],
                     next_s[i], next_state0[i][offset], next_state1[i][offset], next_state2[i][offset]], key="samplecache")
 
     def to_array(self, s, idx):
@@ -349,11 +355,12 @@ brain = Brain()  # brain is global in A3C
 
 opts = [Optimizer() for _ in range(OPTIMIZERS)]
 
-time.sleep(10000)
+time.sleep(1)
 print("Starting optimizers")
 for o in opts:
     o.start()
     time.sleep(5)
+print("Optimizers started")
 
 
 time.sleep(RUN_TIME)
