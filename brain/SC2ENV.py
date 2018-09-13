@@ -19,9 +19,9 @@ class SC2Game:
     def get_state(self):
         data = recv_zipped_pickle(self.r, key="from_agent" + self.id, timeout=self.TIMEOUT)
         if data[0] == 'finished':
-            return True, [], data[2]
+            return True, [], data[2], data[3]
 
-        return False, data[1], data[2]
+        return False, data[1], data[2], data[3]
 
     def make_action(self, action, xy, max_axis = 42):
         x = xy/max_axis
@@ -32,7 +32,10 @@ class SC2Game:
         args = []
 
         if action in get_screen_acions():
-            args = [[0],
+            if action == 13:
+                args = [[x, y]]
+            else:
+                args = [[0],
                     [x, y]]
 
         action = to_sc2_action(action)

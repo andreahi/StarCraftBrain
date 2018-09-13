@@ -111,8 +111,8 @@ class Agent:
 
     def reset(self):
         # pass
-        if random.random() > 0.1:
-            self.epsilon = random.uniform(0.0, 0.6)
+        if random.random() > 0.8:
+            self.epsilon = random.uniform(0.0, 0.2)
         else:
             self.epsilon = 0.0
         self.rnn_state = self.get_lstm_init_state()
@@ -134,7 +134,7 @@ class Agent:
         global frames
         frames = frames + 1
 
-        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, v, rnn_state, a_policy =\
+        a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, minimap_move, x_hatchery, v, rnn_state, a_policy =\
             brain.predict(available_actions, [[np.array(s[0] == 342, dtype="float32")], [s[1]], [s[2]]],
                                               [[self.rnn_state[0]], [self.rnn_state[1]]])
         if v < 0.5:
@@ -146,11 +146,13 @@ class Agent:
         x_Gather = x_Gather[0]
         x_extractor = x_extractor[0]
         minimap_attack = minimap_attack[0]
+        minimap_move = minimap_move[0]
+        x_hatchery = x_hatchery[0]
         _rnn_state = self.rnn_state
         self.rnn_state = [rnn_state[0][0], rnn_state[1][0]]
 
         if random.random() < eps:
-            a = weighted_random_index(available_actions * np.array([1,1,1,1,1,1,1,1,1,1,1,1,1]))
+            a = weighted_random_index(available_actions * np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]))
             a = weighted_random_index(available_actions)
             if a in get_screen_acions():
                 x_select_point = np.random.randint(0, 1764)
@@ -159,8 +161,10 @@ class Agent:
                 x_Gather = np.random.randint(0, 1764)
                 x_extractor = np.random.randint(0, 1764)
                 minimap_attack = np.random.randint(0, 1024)
+                minimap_move = np.random.randint(0, 1024)
+                x_hatchery = np.random.randint(0, 1764)
 
-        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack,  v, _rnn_state, a_policy
+        return a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, minimap_move, x_hatchery,  v, _rnn_state, a_policy
 
     def get_sample(self, memory, n):
         s, a, _, _, rnn_sate, a_policy = memory[0]
@@ -177,23 +181,42 @@ class Agent:
         x_Gather = np.zeros(1764)  # turn action into one-hot representation
         x_extractor = np.zeros(1764)  # turn action into one-hot representation
         minimap_attack = np.zeros(1024)  # turn action into one-hot representation
+        minimap_move = np.zeros(1024)  # turn action into one-hot representation
+        x_hatchery = np.zeros(1764)  # turn action into one-hot representation
+        action_count = 0
         if a[0] != -1:
             #a_cats = (np.ones(NUM_ACTIONS) * -1) /(NUM_ACTIONS - 1)
             a_cats[a[0]] = 1
+            action_count += 1
         if a[1] != -1:
             x_select_cats[a[1]] = 1
+            action_count += 1
         if a[2] != -1:
             x_spawningPool[a[2]] = 1
+            action_count += 1
         if a[3] != -1:
             x_spineCrawler[a[3]] = 1
+            action_count += 1
         if a[4] != -1:
             x_Gather[a[4]] = 1
+            action_count += 1
         if a[5] != -1:
             x_extractor[a[5]] = 1
+            action_count += 1
         if a[6] != -1:
             minimap_attack[a[6]] = 1
+            action_count += 1
+        if a[7] != -1:
+            minimap_move[a[7]] = 1
+            action_count += 1
+        if a[8] != -1:
+            x_hatchery[a[8]] = 1
+            action_count += 1
 
-        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack]), np.copy(r), s_, rnn_sate, a_policy))
+        if action_count != 1:
+            print("ERROR: action count ", action_count)
+
+        self.memory.append((np.copy(s), np.copy([a_cats, x_select_cats, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, minimap_move, x_hatchery]), np.copy(r), s_, rnn_sate, a_policy))
 
         self.R = (self.R + r * GAMMA_N) / GAMMA
 
@@ -277,8 +300,8 @@ class Environment(threading.Thread):
         # brain.summary_writer.add_summary(summary, episode_counter)
 
         self.env.new_episode()
-        done, obs, r = self.env.get_state()
-        s = self.get_state(obs)
+        done, obs, r, r_s = self.env.get_state()
+        s = self.get_state(obs, r_s)
         rnn_state = self.agent.rnn_state
 
         R = 0
@@ -288,7 +311,7 @@ class Environment(threading.Thread):
             # if self.render: self.env.render()
 
             _available_actions = get_available_actions(obs)
-            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
+            a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, minimap_move, x_hatchery, v, _rnn_state, a_policy = self.agent.act(s, _available_actions)
 
             # x = np.random.randint(0, 84)
             # y = np.random.randint(0, 84)
@@ -305,6 +328,8 @@ class Environment(threading.Thread):
                 x_Gather = -1
                 x_extractor = -1
                 minimap_attack = -1
+                minimap_move = -1
+                x_hatchery = -1
                 a = -1
 
             elif a == 6:
@@ -314,6 +339,8 @@ class Environment(threading.Thread):
                 x_Gather = -1
                 x_extractor = -1
                 minimap_attack = -1
+                minimap_move = -1
+                x_hatchery = -1
                 a = -1
 
             elif a == 9:
@@ -323,6 +350,8 @@ class Environment(threading.Thread):
                 x_Gather = -1
                 x_extractor = -1
                 minimap_attack = -1
+                minimap_move = -1
+                x_hatchery = -1
                 a = -1
 
             elif a == 10:
@@ -332,6 +361,8 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_extractor = -1
                 minimap_attack = -1
+                minimap_move = -1
+                x_hatchery = -1
                 a = -1
 
             elif a == 11:
@@ -341,6 +372,8 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_Gather = -1
                 minimap_attack = -1
+                minimap_move = -1
+                x_hatchery = -1
                 a = -1
 
             elif a == 12:
@@ -350,6 +383,30 @@ class Environment(threading.Thread):
                 x_spineCrawler = -1
                 x_Gather = -1
                 x_extractor = -1
+                minimap_move = -1
+                x_hatchery = -1
+                a = -1
+
+            elif a == 13:
+                _ = self.env.make_action(_a, minimap_move, max_axis=32)
+                x_select_point = -1
+                x_spawningPool = -1
+                x_spineCrawler = -1
+                x_Gather = -1
+                x_extractor = -1
+                minimap_attack = -1
+                x_hatchery = -1
+                a = -1
+
+            elif a == 14:
+                _ = self.env.make_action(_a, x_hatchery)
+                x_select_point = -1
+                x_spawningPool = -1
+                x_spineCrawler = -1
+                x_Gather = -1
+                x_extractor = -1
+                minimap_attack = -1
+                minimap_move = -1
                 a = -1
 
             else:
@@ -360,18 +417,20 @@ class Environment(threading.Thread):
                 x_Gather = -1
                 x_extractor = -1
                 minimap_attack = -1
+                x_hatchery = -1
+                minimap_move = -1
 
 
-            done, obs, r = self.env.get_state()
+            done, obs, r, r_s = self.env.get_state()
 
             if done:  # terminal state
                 s_ = None
                 #print("done and none")
                 # s_ = self.get_state(obs)
             else:
-                s_ = self.get_state(obs)
+                s_ = self.get_state(obs, r_s)
             with self.lock_queue:
-                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack], r, v, s_, rnn_state, a_policy)
+                   self.agent.train(s, [a, x_select_point, x_spawningPool, x_spineCrawler, x_Gather, x_extractor, minimap_attack, minimap_move, x_hatchery], r, v, s_, rnn_state, a_policy)
 
             rnn_state = _rnn_state
             s = s_
@@ -381,8 +440,8 @@ class Environment(threading.Thread):
                 break
 
 
-    def get_state(self, obs):
-        return [np.array( (get_screen_unit_type(obs)), dtype="float32" ), np.concatenate((get_player_data(obs), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) > 0), dtype="float32" )]
+    def get_state(self, obs, r_s):
+        return [np.array( (get_screen_unit_type(obs)), dtype="float32" ), np.concatenate((np.concatenate((get_player_data(obs), [r_s])), get_available_actions(obs))), np.array( (get_screen_unit_type(obs) > 0), dtype="float32" )]
 
     def run(self):
         while not self.stop_signal:

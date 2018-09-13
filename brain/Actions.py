@@ -1,8 +1,8 @@
-action_map = {0:0, 1:6, 2:2, 3:483, 4:467, 5:504, 6:84, 7:9, 8:486, 9:85, 10:264, 11:52, 12:13}
+action_map = {0:0, 1:6, 2:2, 3:483, 4:467, 5:504, 6:84, 7:9, 8:486, 9:85, 10:264, 11:52, 12:13, 13:1, 14:59}
 
 action_map_reversed = {v: k for k, v in action_map.items()}
 
-screen_actions = [2, 6, 9, 10, 11, 12]
+screen_actions = [2, 6, 9, 10, 11, 12, 13, 14]
 
 def to_sc2_action(action):
     return action_map[action]
