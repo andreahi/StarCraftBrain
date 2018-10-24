@@ -35,17 +35,6 @@ class Network:
 
         self.default_graph = tf.get_default_graph()
 
-        # self.summary_writer = tf.summary.FileWriter("train", graph=self.default_graph)
-
-        # self.default_graph.finalize()  # avoid modifications
-
-    # @tf.RegisterGradient("CustomGrad5")
-    # def _const_mul_grad(unused_op, grad):
-    #    return 1.0 * grad
-
-    # @tf.RegisterGradient("CustomGrad50")
-    # def _const_mul_grad(unused_op, grad):
-    #    return 1.0 * grad
 
     def _build_model(self):
         # Input and visual encoding layers
@@ -310,9 +299,6 @@ class Network:
         if self.PRINT_DEBUG:
             mean_prob = tf.Print(mean_prob, [mean_prob, tf.shape(mean_prob)], "mean_prob: ")
 
-        # a_entropy =  tf.reduce_sum(self.policy * tf.log(self.policy + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
-        # x_entropy =  tf.reduce_sum(self.policy_x * tf.log(self.policy_x + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
-        # y_entropy =  tf.reduce_sum(self.policy_y * tf.log(self.policy_y + 1e-10), axis=1, keep_dims=True)  # maximize entropy (regularization)
 
         self.v_loss = tf.squeeze(loss_value)  # * tf.squeeze(self.unknown_weights)
         if self.PRINT_DEBUG:
@@ -322,13 +308,6 @@ class Network:
         predict_map_optimizer = tf.train.AdamOptimizer(1e-5)
         # optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
-        # gradients, variables = zip(*optimizer.compute_gradients(tf.reduce_mean(tf.reduce_mean(np.square(self.policy), axis=1)) * 0.001 +
-        #                                                         self.action_weight * (self.a_loss )
-        #                                                        + self.action_weight * self.x_loss_select_point + self.action_weight * self.y_loss_select_point
-        #                                                        + self.action_weight * self.x_loss_spawningPool + self.action_weight * self.y_loss_spawningPool
-        #                                                        + self.action_weight * self.x_loss_spineCrawler + self.action_weight * self.y_loss_spineCrawler
-        #                                                        + self.action_weight * self.x_loss_Gather + self.action_weight * self.y_loss_Gather
-        #                                                       ))
 
         if self.PRINT_DEBUG:
             self.a_loss_policy = tf.Print(self.a_loss_policy, [self.a_loss_policy, tf.shape(self.a_loss_policy)],
@@ -461,38 +440,7 @@ class Network:
 
         self.map_predict_loss = tf.reduce_sum(tf.square(self.future_inputs_unit_type - self.predicted_map))
         self.minimize_predict_map = predict_map_optimizer.minimize(self.map_predict_loss)
-        # self.minimize = optimizer.minimize(tf.reduce_mean(self.total_loss))
-        # gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
 
-        # self.minimize = optimizer.apply_gradients(zip(gradients, variables))
-
-        # gradients_value, variables_value = zip(*optimizer.compute_gradients(self.v_loss))
-        # gradients_value, _ = tf.clip_by_global_norm(gradients_value, 10.0)
-
-        # self.minimize_value = optimizer.apply_gradients(zip(gradients_value, variables_value))
-
-        # optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE)
-
-        # a_optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE * 0.1)
-        # x_optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE * 0.1)
-        # y_optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE * 0.1)
-
-        # v_optimizer = tf.train.GradientDescentOptimizer(self.LEARNING_RATE)
-        # v_optimizer = tf.train.RMSPropOptimizer(self.LEARNING_RATE)
-
-        # a_minimize = a_optimizer.minimize(a_loss)
-        # x_minimize = x_optimizer.minimize(x_loss)
-        # y_minimize = y_optimizer.minimize(y_loss)
-        # v_minimize = v_optimizer.minimize(v_loss)
-
-        # grads = tf.gradients(self.a_loss + self.x_loss + self.y_loss + self.v_loss, var_list)
-        # gvs = v_optimizer.compute_gradients(self.a_loss + self.x_loss + self.y_loss + self.v_loss)
-
-        # capped_gvs, _ = tf.clip_by_global_norm(gvs, 40.0)
-        # self.minimize = v_optimizer.apply_gradients(capped_gvs)
-
-        # self.minimize = v_optimizer.minimize(self.minimize)
-        # self.minimize = v_optimizer.minimize(self.v_loss)
 
     def get_loss_one(self, advantage, policy, t):
         prob_tf = tf.nn.softmax(policy)

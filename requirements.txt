@@ -1,7 +1,8 @@
 matplotlib
 numpy
 scikit-learn
-Keras==2.0.8
 tensorflow-gpu==1.8.0
 redis==2.10.6
 PySC2==1.2
+pymongo==3.7.1
+pyarrow

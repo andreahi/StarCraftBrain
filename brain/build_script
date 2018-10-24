@@ -1,0 +1,27 @@
+
+#Build overlord
+policy[0][7] = 10
+policy[0][3] = 10
+
+#Move to natural
+policy_minimap_move[0][745] = 10
+
+#Build hatchery
+policy_hatchery[0][660] = 10
+#Select hatchery
+policy_x_select_point[0][660] = 10
+
+#Build queen
+policy[0][8] = 10
+
+#Select larva
+policy[0][7] = 10
+
+#Build drone
+policy[0][4] = 10
+
+#Idle worker
+policy[0][1] = 10
+
+#Gather natural
+policy_x_Gather[0][770] = 10

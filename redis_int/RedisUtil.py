@@ -28,6 +28,18 @@ def recv_s(socket, key="trainingsample", count=1, poplimit=0):
             socket.spop(key)
     return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
 
+def recv_pop_s(socket, key="trainingsample", count=1):
+
+    if count == -1:
+        count = socket.scard(key)
+    count = min(socket.scard(key), count)
+
+    data_l = []
+
+    while len(data_l) < count:
+        data_l.append(socket.spop(key))
+    return [pickle.loads(zlib.decompress(x), encoding='latin1') for x in data_l ]
+
 def to_array(s):
     return np.array(list(np.array(s)), dtype=np.float16)
 

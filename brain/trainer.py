@@ -1,4 +1,3 @@
-import random
 import threading
 import time
 import traceback
@@ -7,12 +6,14 @@ import redis
 import numpy as np
 from Actions import get_action_map
 from Network import Network
-from heapq import nlargest
 
 from brain.TensorlowDataHelper import from_indexable
-from redis_int.RedisUtil import recv_s, send_s
+from mongo.MongoUtils import retrieve, insert
+from redis_int.RedisUtil import recv_pop_s
 
 import os
+
+from brain.runner import run
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -29,7 +30,7 @@ EPS_START = .5
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
-TRAINING_SIZE = 15000
+TRAINING_SIZE = 5000
 BATCH_COUNT = 1
 
 LOSS_V = .5  # v loss coefficient
@@ -49,7 +50,7 @@ class Brain:
     def __init__(self):
         self.network = Network()
         self.first_run = True
-        self.r = redis.StrictRedis(host='in.space', port=6379, db=0)
+        self.r = redis.StrictRedis(host='10.0.0.112', port=6379, db=0)
         self.lastTime = time.clock()
         np.set_printoptions(threshold=12)
         #self.features_mean_images = {}
@@ -57,7 +58,7 @@ class Brain:
     def optimize(self):
         # if len(self.train_queue[0]) < MIN_BATCH:
         # with self.read_lock:
-        self.import_new_data()
+        #self.import_new_data()
 
         class SceneGenerator(object):
             def __init__(self, trainer):
@@ -68,8 +69,8 @@ class Brain:
 
             def __getitem__(self, item):
                 a, r, s, v, total_weights, s_f = self.trainer.get_data()
-                return a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], r, s[0], s[1], s[2], v, total_weights, s_f[
-                    0], s_f[1], s_f[2]
+                return a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], r, s[0], s[1], s[2], v, total_weights, \
+                       s_f[0], s_f[1], s_f[2]
 
         import tensorflow as tf
         ds = from_indexable(SceneGenerator(self),
@@ -148,7 +149,7 @@ class Brain:
             while 1:
                 try:
                     with self.save_lock:
-                        brain.save()
+                        self.save()
                     break
                 except Exception as exp:
                     print(exp)
@@ -159,16 +160,20 @@ class Brain:
 
     def import_new_data(self):
         train_queue = [[], [], [], [], [], [], [], [], []]
-        print("starting optimize")
+        print("Importing new data")
         for _ in range(1):
 
-            samples = recv_s(self.r, key="gamesample", count=-1)
+            samples = recv_pop_s(self.r, key="gamesample", count=1)
+            print("len samples ", len(samples))
             for sample in samples:
                 for e in sample:
                     self.train_push(train_queue, *e)
 
         if len(train_queue[0]) > 0:
+            print("caching data ", len(train_queue))
             self.cache_training_data(train_queue)
+        else:
+            time.sleep(5)
 
     def get_data(self):
         s = [0, 0,
@@ -180,7 +185,9 @@ class Brain:
              0, 0,
              0, 0,
              0]
-        cached_samples = recv_s(self.r, key="samplecache", count=TRAINING_SIZE, poplimit=1000000)
+        #cached_samples = recv_s(self.r, key="samplecache", count=TRAINING_SIZE, poplimit=1000000)
+        cached_samples = retrieve(samples=TRAINING_SIZE)
+
         #_ = recv_s(self.r, key="samplecache", poplimit=500000)
         s[0] = np.array(self.to_array(cached_samples, 0) == 342, dtype="float16")
         s[1] = self.to_array(cached_samples, 1)
@@ -201,60 +208,7 @@ class Brain:
         s_f[1] = self.to_array(cached_samples, 16)
         s_f[2] = self.to_array(cached_samples, 17)
 
-        # next_s = self.to_array(cached_samples,11)
-        if False:
-            next_s = np.zeros(shape=(TRAINING_SIZE, 2, 84, 84), dtype="int16")
-            for i in range(len(cached_samples)):
-                e = cached_samples[i]
-                sample = np.zeros(shape=(2, 84, 84))
-                sample[:min(e[14].shape[0], 2), :e[14].shape[1]] = e[14][:min(e[14].shape[0], 2)]
-                next_s[i] = sample
-            if self.first_run:
-                print("first run")
-                self.first_run = False
-            unit_types = set()
-            for state_s in next_s:
-                for e in state_s:
-                    for u in np.unique(e):
-                        # print("u: ", u)
-                        continue
-                        # if not(u == 88 or u == 104):
-                        #    continue
-                        if u == 0:
-                            continue
-                        unit_types.add(u)
-            feature_images = next_s
-            total_weights = np.zeros(shape=(len(unit_types), len(feature_images)), dtype="float16")
-            unit_types = list(unit_types)
-            print("creating state weights")
-            # tmp_compared = np.zeros(shape=next_s.shape)
-            for u_index in range(len(unit_types)):
-                feature = unit_types[u_index]
-                print(feature)
-                if feature == 0:
-                    continue
-                if feature not in self.features_mean_images or random.random() > 0.9:
-                    print("feature not found: ", feature)
-                    mean_images = []
-                    for states in next_s:
-                        for future_state in states:
-                            bit_feature_image = future_state == feature
-                            mean_images.append(bit_feature_image)
-                    if feature not in self.features_mean_images:
-                        self.features_mean_images[feature] = np.mean(mean_images, axis=0)
-                    else:
-                        self.features_mean_images[feature] = 0.9 * self.features_mean_images[feature] + 0.1 * np.mean(
-                            mean_images, axis=0)
-                total_weights[u_index] = np.max(
-                    np.mean(
-                        np.mean(np.square((self.features_mean_images[feature] - np.equal(next_s, feature))), axis=2),
-                        axis=2), axis=1)
-            # print("done creating state weights")
-            normalized_weights = self.get_weight(total_weights)
-            total_weights = normalized_weights
-            print("max extra points: ", nlargest(10, total_weights))
-            r = r.squeeze() + 0.1 * total_weights
-            r = np.expand_dims(r, axis=1)
+
         return a, r, s, v, np.zeros(shape=(1), dtype="float16"), s_f
 
     def get_weight(self, total_weights):
@@ -270,36 +224,47 @@ class Brain:
         return normalized_weights
 
     def cache_training_data(self, train_queue):
+        print("length ", len(train_queue[0]))
         s, a, r, s_, s_mask, rnn_state, v, a_policy, next_s = train_queue
         print("prepping training data")
+        print("prepping s")
         s = [self.to_array(s, 0), self.to_array(s, 1), self.to_array(s, 2)]
         # next_s= map(lambda state: np.array(list(np.array(state)[:, 0]), dtype=np.float32), next_s)
         next_state0 = []
         next_state1 = []
         next_state2 = []
-        next_state = []
+        #next_state = []
+        print("prepping next_state")
         for e in next_s:
-            next_state.append(self.to_array(e, 0))
+            #next_state.append(self.to_array(e, 0))
             next_state0.append(self.to_array(e, 0))
             next_state1.append(self.to_array(e, 1))
             next_state2.append(self.to_array(e, 2))
-
-        next_s = next_state
+        #del next_s
+        #next_s = next_state
+        print("prepping a")
         a = [self.to_array(a, 0), self.to_array(a, 1), self.to_array(a, 2),
              self.to_array(a, 3), self.to_array(a, 4), self.to_array(a, 5), self.to_array(a, 6),
              self.to_array(a, 7), self.to_array(a, 8)]
+        print("prepping r")
         r = np.vstack(r)
+        print("prepping v")
         v = np.vstack(v)
+        print("inserting data")
         for i in range(len(train_queue[0])):
             offset = min(len(next_state0[i]) - 1, 1)
             # if 88.0 in s[0][i]:
             #    print("found 88")
-            send_s(self.r,
-                   [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], a[6][i], a[7][i],
-                    a[8][i], r[i], v[i],
-                    next_s[i], next_state0[i][offset], next_state1[i][offset], next_state2[i][offset]],
-                   key="samplecache")
-
+            #send_s(self.r,
+            #       [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], a[6][i], a[7][i],
+            #        a[8][i], r[i], v[i],
+            #        next_s[i], next_state0[i][offset], next_state1[i][offset], next_state2[i][offset]],
+            #       key="samplecache")
+            insert(
+                [s[0][i], s[1][i], s[2][i], a[0][i], a[1][i], a[2][i], a[3][i], a[4][i], a[5][i], a[6][i], a[7][i],
+                        a[8][i], r[i], v[i],
+                        [], next_state0[i][offset], next_state1[i][offset], next_state2[i][offset]]
+            )
     def to_array(self, s, idx):
         return np.array(list(np.array(s)[:, idx]), dtype=np.float16)
 
@@ -358,7 +323,8 @@ class Optimizer(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        while not self.stop_signal:
+        brain = Brain()  # brain is global in A3C
+        while True:
             try:
                 brain.optimize()
             except Exception as exp:
@@ -370,26 +336,35 @@ class Optimizer(threading.Thread):
     def stop(self):
         self.stop_signal = True
 
+class DataLoader(threading.Thread):
+    stop_signal = False
 
-# -- main
-NUM_STATE = 7071
-NUM_ACTIONS = len(get_action_map())
-NONE_STATE = np.zeros(NUM_STATE)
+    def __init__(self):
+        threading.Thread.__init__(self)
 
-brain = Brain()  # brain is global in A3C
+    def run(self):
+        brain = Brain()  # brain is global in A3C
+        while not self.stop_signal:
+            try:
+                brain.import_new_data()
+            except Exception as exp:
+                tb = traceback.format_exc()
+                print("got exception while training")
+                print(tb)
+                print(exp)
 
-opts = [Optimizer() for _ in range(OPTIMIZERS)]
+    def stop(self):
+        self.stop_signal = True
 
-time.sleep(1)
-print("Starting optimizers")
-for o in opts:
-    o.start()
-    time.sleep(5)
-print("Optimizers started")
 
-time.sleep(RUN_TIME)
 
-for o in opts:
-    o.stop()
-for o in opts:
-    o.join()
+
+
+def main():
+        optimizer = Optimizer()
+        optimizer.start()
+        optimizer.join()
+
+
+if __name__ == "__main__":
+    main()
