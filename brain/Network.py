@@ -6,7 +6,6 @@ from sklearn.preprocessing import normalize
 from tensorflow.contrib import slim
 
 import numpy as np
-from tensorflow.python.keras._impl.keras.layers import LeakyReLU
 from tensorflow.python.training.optimizer import _OptimizableVariable
 
 
@@ -57,21 +56,21 @@ class Network:
         value_hidden2 = self.get_network()
 
         flatten = tf.concat([type_flatten, self.input_player, workers_flatten], axis=1)
-        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=LeakyReLU())
-        hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=LeakyReLU())
+        hidden1 = slim.fully_connected(flatten, 1000, activation_fn=tf.nn.leaky_relu())
+        hidden2 = slim.fully_connected(hidden1, 1000, activation_fn=tf.nn.leaky_relu())
 
         self.batchsize = tf.placeholder(tf.int32, None, name='a')
 
         # batchsize = 2
         D_in, D_out = 1000, 256
 
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(300, activation=LeakyReLU())
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(300, activation=tf.nn.leaky_relu())
         self.state_in = lstm_cell.zero_state(tf.shape(hidden2)[0], tf.float32)
 
         rnn_out, self.state_out = lstm_cell(hidden2, self.state_in)
         rnn_v = value_hidden2
         # rnn_out = hidden2
-        hidden_out = slim.fully_connected(rnn_out, 100, activation_fn=LeakyReLU(),
+        hidden_out = slim.fully_connected(rnn_out, 100, activation_fn=tf.nn.leaky_relu(),
                                           weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
         hidden_out = hidden2
         hidden_out = tf.nn.dropout(hidden_out, 1)  # DROP-OUT here
@@ -107,17 +106,17 @@ class Network:
                                           biases_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                           )
 
-        self.predicted_map = slim.conv2d(activation_fn=LeakyReLU(),
+        self.predicted_map = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                          inputs=self.future_inputs_unit_type, num_outputs=1,
                                          kernel_size=16, stride=1)
 
     def get_conv_out(self, outvalues, shape):
-        connected = slim.fully_connected(self.get_network(), outvalues, activation_fn=LeakyReLU(),
+        connected = slim.fully_connected(self.get_network(), outvalues, activation_fn=tf.nn.leaky_relu(),
                                          weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY))
         out_pick = tf.reshape(connected, [-1, shape, shape, 1])
 
         type_conv2 = tf.layers.conv2d(
-            activation=LeakyReLU(),
+            activation=tf.nn.leaky_relu(),
             inputs=out_pick,
             filters=1,
             kernel_size=[5, 5],
@@ -139,13 +138,13 @@ class Network:
         workers_flatten_value = self.gaussian_noise_layer(workers_flatten_value, 0)
 
         flatten_value = tf.concat([type_flatten_value, self.input_player, workers_flatten_value], axis=1)
-        value_hidden1 = slim.fully_connected(flatten_value, 100, activation_fn=LeakyReLU(),
+        value_hidden1 = slim.fully_connected(flatten_value, 100, activation_fn=tf.nn.leaky_relu(),
                                              weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                              )
 
         value_hidden2 = tf.concat([(self.input_player), (value_hidden1)], axis=1)
 
-        value_hidden3 = slim.fully_connected(value_hidden2, 100, activation_fn=LeakyReLU(),
+        value_hidden3 = slim.fully_connected(value_hidden2, 100, activation_fn=tf.nn.leaky_relu(),
                                              weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                              )
         # value_hidden3 = tf.layers.batch_normalization(value_hidden3)
@@ -854,33 +853,33 @@ class Network:
         return type_flatten
 
     def get_conv(self, image_unit_type):
-        type_conv1 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv1 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=image_unit_type, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
         # type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
-        type_conv2 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv2 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=type_conv1, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        type_conv3 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv3 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=type_conv2, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        type_conv4 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv4 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=type_conv3, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        type_conv5 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv5 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=type_conv4, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        type_conv6 = slim.conv2d(activation_fn=LeakyReLU(),
+        type_conv6 = slim.conv2d(activation_fn=tf.nn.leaky_relu(),
                                  inputs=type_conv5, num_outputs=128,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
