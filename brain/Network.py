@@ -106,9 +106,9 @@ class Network:
                                           biases_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                           )
 
-        self.predicted_map = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                         inputs=self.future_inputs_unit_type, num_outputs=1,
-                                         kernel_size=16, stride=1)
+        #self.predicted_map = slim.conv2d(activation_fn=tf.nn.leaky_relu,
+        #                                 inputs=self.future_inputs_unit_type, num_outputs=1,
+        #                                 kernel_size=16, stride=1)
 
     def get_conv_out(self, outvalues, shape):
         connected = slim.fully_connected(self.get_network(), outvalues, activation_fn=tf.nn.leaky_relu,
@@ -437,8 +437,8 @@ class Network:
         self.minimize_minimap_move = optimizer.minimize(tf.reduce_mean(self.x_loss_minimap_move))
         self.minimize_hatchery = optimizer.minimize(tf.reduce_mean(self.x_loss_hatchery))
 
-        self.map_predict_loss = tf.reduce_sum(tf.square(self.future_inputs_unit_type - self.predicted_map))
-        self.minimize_predict_map = predict_map_optimizer.minimize(self.map_predict_loss)
+        #self.map_predict_loss = tf.reduce_sum(tf.square(self.future_inputs_unit_type - self.predicted_map))
+        #self.minimize_predict_map = predict_map_optimizer.minimize(self.map_predict_loss)
 
 
     def get_loss_one(self, advantage, policy, t):
@@ -853,38 +853,30 @@ class Network:
         return type_flatten
 
     def get_conv(self, image_unit_type):
+
+
+        image_unit_type = tf.expand_dims(image_unit_type, 3)
+
         type_conv1 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=image_unit_type, num_outputs=128,
+                                 inputs=image_unit_type, num_outputs=3,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        # type_conv1 = tf.Print(type_conv1, [type_conv1], "type_conv1: ")
+
         type_conv2 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=type_conv1, num_outputs=128,
+                                 inputs=type_conv1, num_outputs=3,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
         type_conv3 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=type_conv2, num_outputs=128,
+                                 inputs=type_conv2, num_outputs=3,
                                  kernel_size=4, stride=2, padding='SAME',
                                  weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
                                  )
-        type_conv4 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=type_conv3, num_outputs=128,
-                                 kernel_size=4, stride=2, padding='SAME',
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                 )
-        type_conv5 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=type_conv4, num_outputs=128,
-                                 kernel_size=4, stride=2, padding='SAME',
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                 )
-        type_conv6 = slim.conv2d(activation_fn=tf.nn.leaky_relu,
-                                 inputs=type_conv5, num_outputs=128,
-                                 kernel_size=4, stride=2, padding='SAME',
-                                 weights_regularizer=slim.l2_regularizer(self.WEIGHT_DECAY),
-                                 )
-        return type_conv1
+
+        #type_conv3 = tf.Print(type_conv3, [type_conv3, tf.shape(type_conv3)],
+        #                             "self.type_conv3: ", name="self.type_conv3")
+        return type_conv3
 
 
 # Used to initialize weights for policy and value output layers
