@@ -6,3 +6,4 @@ redis==2.10.6
 PySC2==1.2
 pymongo==3.7.1
 pyarrow
+redis==3.1.0
