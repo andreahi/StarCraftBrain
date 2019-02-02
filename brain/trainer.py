@@ -30,7 +30,7 @@ EPS_START = .5
 EPS_STEPS = 750
 
 MIN_BATCH = 10000
-TRAINING_SIZE = 5000
+TRAINING_SIZE = 1000
 BATCH_COUNT = 1
 
 LOSS_V = .5  # v loss coefficient
@@ -252,7 +252,7 @@ class Brain:
         v = np.vstack(v)
         print("inserting data")
         for i in range(len(train_queue[0])):
-            offset = min(len(next_state0[i]) - 1, 1)
+            offset = min(len(next_state0[i]) - 1, 50)
             # if 88.0 in s[0][i]:
             #    print("found 88")
             #send_s(self.r,
