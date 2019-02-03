@@ -303,7 +303,7 @@ class Network:
         if self.PRINT_DEBUG:
             self.v_loss = tf.Print(self.v_loss, [self.v_loss, tf.shape(self.v_loss)], "self.v_loss: ")
         # 1.032e+00 -9.617e-01
-        optimizer = tf.train.AdamOptimizer(1e-6)
+        optimizer = tf.train.AdamOptimizer(1e-5)
         predict_map_optimizer = tf.train.AdamOptimizer(1e-5)
         # optimizer = tf.train.GradientDescentOptimizer(1e-3)
 
