@@ -3,6 +3,8 @@ import threading
 import time
 import traceback
 
+import numpy as np
+
 import redis
 from keras.models import *
 
