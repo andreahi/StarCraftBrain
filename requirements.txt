@@ -2,7 +2,8 @@ matplotlib
 numpy
 scikit-learn
 tensorflow-gpu==1.12.0
-PySC2==1.2
+PySC2==2.0.1
 pymongo==3.7.1
 pyarrow==0.10.0
 redis==3.1.0
+keras

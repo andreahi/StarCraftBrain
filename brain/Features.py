@@ -4,11 +4,11 @@ from Actions import to_local_action, get_reversed_action_map
 
 
 def get_screen_unit_type(obs):
-    return obs[3]['screen'][6]
+    return np.array(obs[3].feature_screen)[6]
 
 
 def get_screen_unit_selected(obs):
-    return obs[3]['screen'][7].flatten()
+    return np.array(obs[3].feature_screen)[7].flatten()
 
 def get_player_data(obs):
     player_ = [
